@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Godot-specific folders
 .godot/
 .import/
@@ -40,3 +41,24 @@ android/build/
 ios/build/
 
 
+=======
+# Godot 4+ specific ignores
+.godot/
+.android/
+
+# Godot import files (binary cache files)
+.import/
+*.godot-import
+
+# Export configurations (safe to ignore)
+export.cfg
+export_presets.cfg
+
+# OS-specific files (Windows, macOS)
+.DS_Store
+Thumbs.db
+
+# Logs & caches
+logs/
+.cache/
+>>>>>>> e2d863e (DEPLOY: Initial commit, rollback netcode engine added.)
