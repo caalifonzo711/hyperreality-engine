@@ -1,7 +1,9 @@
 @tool
 extends Node
 
-const LogData = preload("res://addons/godot-rollback-netcode/log_inspector/LogData.gd")
+#const LogData = preload("res://addons/godot-rollback-netcode/log_inspector/LogData.gd")
+const LogData = preload("res://addons/rollback_netcode/log_inspector/LogData.gd")
+
 
 const GAME_ARGUMENTS_SETTING = 'network/rollback/log_inspector/replay_arguments'
 const GAME_PORT_SETTING = 'network/rollback/log_inspector/replay_port'

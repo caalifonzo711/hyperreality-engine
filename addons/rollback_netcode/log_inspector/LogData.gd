@@ -1,8 +1,8 @@
 @tool
 extends RefCounted
 
-const Logger = preload("res://addons/godot-rollback-netcode/Logger.gd")
-
+#const Logger = preload("res://addons/godot-rollback-netcode/Logger.gd")
+const Logger = preload("res://addons/rollback_netcode/Logger.gd")
 class StateData:
 	var tick: int
 	var state: Dictionary

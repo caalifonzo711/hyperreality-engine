@@ -1,9 +1,9 @@
 @tool
 extends Control
 
-const Logger = preload("res://addons/godot-rollback-netcode/Logger.gd")
-const ReplayServer = preload("res://addons/godot-rollback-netcode/log_inspector/ReplayServer.gd")
-const LogData = preload("res://addons/godot-rollback-netcode/log_inspector/LogData.gd")
+const Logger = preload("res://addons/rollback_netcode/Logger.gd")
+const ReplayServer = preload("res://addons/rollback_netcode/log_inspector/ReplayServer.gd")
+const LogData = preload("res://addons/rollback_netcode/log_inspector/LogData.gd")
 
 @onready var time_field = $VBoxContainer/HBoxContainer/Time
 @onready var seek_on_replay_peer_field = $VBoxContainer/HBoxContainer/SeekOnReplayPeerField

@@ -1,8 +1,8 @@
 @tool
 extends Window
 
-const LogData = preload("res://addons/godot-rollback-netcode/log_inspector/LogData.gd")
-const ReplayServer = preload("res://addons/godot-rollback-netcode/log_inspector/ReplayServer.gd")
+const LogData = preload("res://addons/rollback_netcode/log_inspector/LogData.gd")
+const ReplayServer = preload("res://addons/rollback_netcode/log_inspector/ReplayServer.gd")
 
 @onready var file_dialog = $FileDialog
 @onready var progress_dialog = $ProgressDialog

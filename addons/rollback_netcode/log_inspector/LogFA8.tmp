@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://teh77pd0ah27" path="res://addons/rollback_netcode/log_inspector/ProgressDialog.tscn" id="1"]
 [ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/LogInspector.gd" id="2"]
-[ext_resource type="PackedScene" uid="uid://xxmk0b3di4jn" path="res://addons/rollback_netcode/log_inspector/StateInputViewer.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://addons/rollback_netcode/log_inspector/StateInputViewer.tscn" id="3"]
 [ext_resource type="PackedScene" uid="uid://58hro2kq3tlw" path="res://addons/rollback_netcode/log_inspector/FrameViewer.tscn" id="4"]
 [ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/ReplayServer.gd" id="5"]
 
@@ -24,6 +24,7 @@ filters = PackedStringArray("*.log ; Log files")
 
 [node name="ProgressDialog" parent="." instance=ExtResource("1")]
 size = Vector2i(400, 100)
+script = null
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 anchors_preset = 15
@@ -146,10 +147,12 @@ layout_mode = 2
 [node name="FrameViewer" parent="MarginContainer/VBoxContainer" instance=ExtResource("4")]
 layout_mode = 2
 size_flags_vertical = 3
+script = null
 
 [node name="StateInputViewer" parent="MarginContainer/VBoxContainer" instance=ExtResource("3")]
 visible = false
 layout_mode = 2
+script = null
 
 [node name="ReplayServer" type="Node" parent="."]
 script = ExtResource("5")
