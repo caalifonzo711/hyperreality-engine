@@ -1,120 +1,53 @@
-[gd_scene format=3 uid="uid://xxmk0b3di4jn"]
+[gd_scene load_steps=2 format=3 uid="uid://c8rk1k2kdbdlk"]
 
-[node name="StateInputViewer" type="VBoxContainer"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-size_flags_vertical = 3
+[ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/StateInputViewer.gd" id="1_47taa"]
+
+[node name="StateInputViewer" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_47taa")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="."]
-layout_mode = 2
-
-[node name="TickNumberLabel" type="Label" parent="HBoxContainer"]
-layout_mode = 2
-text = "Tick:"
-
-[node name="TickNumber" type="SpinBox" parent="HBoxContainer"]
-layout_mode = 2
-max_value = 0.0
-rounded = true
-
-[node name="StartButton" type="Button" parent="HBoxContainer"]
-layout_mode = 2
-text = "Start"
-
-[node name="PreviousMismatchButton" type="Button" parent="HBoxContainer"]
-layout_mode = 2
-text = "<< Previous Mismatch"
-
-[node name="NextMismatchButton" type="Button" parent="HBoxContainer"]
-layout_mode = 2
-text = "Next Mismatch >>"
-
-[node name="EndButton" type="Button" parent="HBoxContainer"]
-layout_mode = 2
-text = "End"
-
-[node name="GridContainer" type="GridContainer" parent="."]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/h_separation = 5
-theme_override_constants/v_separation = 5
-columns = 2
-
-[node name="InputLabel" type="Label" parent="GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Input:"
-
-[node name="InputMismatchesLabel" type="Label" parent="GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Input Mismatches:"
-
-[node name="InputPanel" type="Panel" parent="GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="InputDataTree" type="Tree" parent="GridContainer/InputPanel"]
 layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-columns = 2
-hide_root = true
-select_mode = 1
+offset_right = 40.0
+offset_bottom = 40.0
 
-[node name="InputMismatchesPanel" type="Panel" parent="GridContainer"]
+[node name="TickNumber" type="LineEdit" parent="HBoxContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
 
-[node name="InputMismatchesDataTree" type="Tree" parent="GridContainer/InputMismatchesPanel"]
+[node name="GridContainer" type="GridContainer" parent="HBoxContainer"]
+layout_mode = 2
+
+[node name="InputPanel" type="Panel" parent="HBoxContainer/GridContainer"]
+layout_mode = 2
+
+[node name="InputDataTree" type="Tree" parent="HBoxContainer/GridContainer/InputPanel"]
 layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-columns = 3
-hide_root = true
-select_mode = 1
+offset_right = 16.0
+offset_bottom = 17.0
 
-[node name="StateLabel" type="Label" parent="GridContainer"]
+[node name="InputMismatchesPanel" type="Panel" parent="HBoxContainer/GridContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
-text = "State:"
 
-[node name="StateMismatchesLabel" type="Label" parent="GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "State Mismatches:"
-
-[node name="StatePanel" type="Panel" parent="GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="StateDataTree" type="Tree" parent="GridContainer/StatePanel"]
+[node name="InputMismatchesDataTree" type="Tree" parent="HBoxContainer/GridContainer/InputMismatchesPanel"]
 layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-columns = 2
-hide_root = true
-select_mode = 1
+offset_right = 16.0
+offset_bottom = 17.0
 
-[node name="StateMismatchesPanel" type="Panel" parent="GridContainer"]
+[node name="StatePanel" type="Panel" parent="HBoxContainer/GridContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
 
-[node name="StateMismatchesDataTree" type="Tree" parent="GridContainer/StateMismatchesPanel"]
+[node name="StateDataTree" type="Tree" parent="HBoxContainer/GridContainer/StatePanel"]
 layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-columns = 3
-hide_root = true
-select_mode = 1
+offset_right = 16.0
+offset_bottom = 17.0
 
-[connection signal="value_changed" from="HBoxContainer/TickNumber" to="." method="_on_TickNumber_value_changed"]
-[connection signal="pressed" from="HBoxContainer/StartButton" to="." method="_on_StartButton_pressed"]
-[connection signal="pressed" from="HBoxContainer/PreviousMismatchButton" to="." method="_on_PreviousMismatchButton_pressed"]
-[connection signal="pressed" from="HBoxContainer/NextMismatchButton" to="." method="_on_NextMismatchButton_pressed"]
-[connection signal="pressed" from="HBoxContainer/EndButton" to="." method="_on_EndButton_pressed"]
+[node name="StateMismatchesPanel" type="Panel" parent="HBoxContainer/GridContainer"]
+layout_mode = 2
+
+[node name="StateMismatchesDataTree" type="Tree" parent="HBoxContainer/GridContainer/StateMismatchesPanel"]
+layout_mode = 0
+offset_right = 16.0
+offset_bottom = 17.0

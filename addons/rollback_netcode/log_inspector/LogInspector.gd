@@ -1,5 +1,6 @@
 @tool
-extends Window
+#extends Window
+extends AcceptDialog
 
 const LogData = preload("res://addons/rollback_netcode/log_inspector/LogData.gd")
 const ReplayServer = preload("res://addons/rollback_netcode/log_inspector/ReplayServer.gd")
@@ -9,7 +10,7 @@ const ReplayServer = preload("res://addons/rollback_netcode/log_inspector/Replay
 @onready var data_description_label = $MarginContainer/VBoxContainer/LoadToolbar/DataDescriptionLabel
 @onready var data_description_label_default_text = data_description_label.text
 @onready var mode_button = $MarginContainer/VBoxContainer/LoadToolbar/ModeButton
-@onready var state_input_viewer = $MarginContainer/VBoxContainer/StateInputViewer
+@onready var state_input_viewer = $VBoxContainer/StateInputViewer
 @onready var frame_viewer = $MarginContainer/VBoxContainer/FrameViewer
 @onready var replay_server = $ReplayServer
 @onready var replay_server_status_label = $MarginContainer/VBoxContainer/ReplayToolbar/ServerContainer/HBoxContainer/ReplayStatusLabel
@@ -18,6 +19,7 @@ const ReplayServer = preload("res://addons/rollback_netcode/log_inspector/Replay
 @onready var disconnect_button = $MarginContainer/VBoxContainer/ReplayToolbar/ServerContainer/HBoxContainer/DisconnectButton
 @onready var launch_game_button = $MarginContainer/VBoxContainer/ReplayToolbar/ClientContainer/HBoxContainer/LaunchGameButton
 @onready var show_peer_field = $MarginContainer/VBoxContainer/ReplayToolbar/ClientContainer/HBoxContainer/ShowPeerField
+
 
 enum DataMode {
 	STATE_INPUT,
@@ -31,8 +33,23 @@ var log_data: LogData = LogData.new()
 var _files_to_load := []
 
 func _ready() -> void:
-	state_input_viewer.set_log_data(log_data)
+	print("DEBUG: LogInspector _ready() started!")  # ✅ This prints
+	
+	# Manually reassigning to ensure correct node type
+	state_input_viewer = get_node("VBoxContainer/StateInputViewer")
+	
+	print("DEBUG: state_input_viewer assigned ->", state_input_viewer, "Type:", state_input_viewer.get_class())
+	#print("DEBUG: Before setting log data for state_input_viewer")  # ✅ If this prints, `state_input_viewer` is fine
+	#state_input_viewer.set_log_data(log_data)
+	#print("DEBUG: state_input_viewer is:", state_input_viewer, "Type:", state_input_viewer.get_class())   3-19-2025
+	#state_input_viewer.set_log_data(log_data)
+
+	
+	print("DEBUG: Before setting log data for frame_viewer")  # ✅ If this prints, `state_input_viewer` succeeded
+	print("frame_viewer is:", frame_viewer, "Type:", frame_viewer.get_class())  # 🔍 Debug output
 	frame_viewer.set_log_data(log_data)
+
+
 
 	log_data.load_error.connect(self._on_log_data_load_error)
 	log_data.load_progress.connect(self._on_log_data_load_progress)
@@ -196,3 +213,4 @@ func _on_DisconnectButton_pressed() -> void:
 
 func _on_ShowPeerField_item_selected(index: int) -> void:
 	refresh_replay()
+	

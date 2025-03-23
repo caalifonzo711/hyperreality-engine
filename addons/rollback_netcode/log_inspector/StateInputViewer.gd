@@ -1,5 +1,8 @@
 @tool
-extends VBoxContainer
+extends Control  # ✅ Correct! Now it will recognize the script properly.
+#@tool
+#extends VBoxContainer
+
 
 const LogData = preload("res://addons/rollback_netcode/log_inspector/LogData.gd")
 const ReplayServer = preload("res://addons/rollback_netcode/log_inspector/ReplayServer.gd")
@@ -18,10 +21,12 @@ var replay_server: ReplayServer
 var replay_peer_id: int
 
 func _ready() -> void:
-	for tree in [input_mismatches_data_tree, state_mismatches_data_tree]:
-		tree.set_column_title(1, "Local")
-		tree.set_column_title(2, "Remote")
-		tree.set_column_titles_visible(true)
+	for tree in [input_mismatches_data_tree, state_mismatches_data_tree]:  
+		tree.set_columns(3)  # Ensure the tree has at least 3 columns  
+		tree.set_column_title(1, "Local")  
+		tree.set_column_title(2, "Remote")  
+		tree.set_column_titles_visible(true)  
+
 
 func set_log_data(_log_data: LogData) -> void:
 	log_data = _log_data

@@ -1,17 +1,17 @@
 [gd_scene load_steps=7 format=3 uid="uid://dsud2u0uhwn4m"]
 
 [ext_resource type="PackedScene" uid="uid://teh77pd0ah27" path="res://addons/rollback_netcode/log_inspector/ProgressDialog.tscn" id="1"]
-[ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/LogInspector.gd" id="1_672st"]
+[ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/LogInspector.gd" id="2"]
 [ext_resource type="PackedScene" uid="uid://58hro2kq3tlw" path="res://addons/rollback_netcode/log_inspector/FrameViewer.tscn" id="4"]
 [ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/FrameViewer.gd" id="4_wor6b"]
 [ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/ReplayServer.gd" id="5"]
-[ext_resource type="PackedScene" uid="uid://c8rk1k2kdbdlk" path="res://addons/rollback_netcode/log_inspector/StateInputViewer.tscn" id="5_c18vn"]
+[ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/StateInputViewer.gd" id="5_mbxys"]
 
 [node name="LogInspector" type="AcceptDialog"]
 title = "Log Inspector"
 size = Vector2i(1024, 600)
 ok_button_text = "Close"
-script = ExtResource("1_672st")
+script = ExtResource("2")
 
 [node name="FileDialog" type="FileDialog" parent="."]
 mode = 1
@@ -149,8 +149,48 @@ layout_mode = 2
 size_flags_vertical = 3
 script = ExtResource("4_wor6b")
 
-[node name="StateInputViewer" parent="MarginContainer/VBoxContainer" instance=ExtResource("5_c18vn")]
+[node name="StateInputViewer" type="Control" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
+script = ExtResource("5_mbxys")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StateInputViewer"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TickNumber" type="Label" parent="MarginContainer/VBoxContainer/StateInputViewer/HBoxContainer"]
+layout_mode = 2
+
+[node name="GridContainer" type="GridContainer" parent="MarginContainer/VBoxContainer/StateInputViewer"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="InputPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer/StateInputViewer/GridContainer"]
+layout_mode = 2
+
+[node name="InputDataTree" type="Tree" parent="MarginContainer/VBoxContainer/StateInputViewer/GridContainer/InputPanel"]
+layout_mode = 2
+
+[node name="InputMismatchesPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer/StateInputViewer/GridContainer"]
+layout_mode = 2
+
+[node name="InputMismatchesDataTree" type="Tree" parent="MarginContainer/VBoxContainer/StateInputViewer/GridContainer/InputMismatchesPanel"]
+layout_mode = 2
+column_titles_visible = true
+
+[node name="StatePanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer/StateInputViewer/GridContainer"]
+layout_mode = 2
+
+[node name="StateDataTree" type="Tree" parent="MarginContainer/VBoxContainer/StateInputViewer/GridContainer/StatePanel"]
+layout_mode = 2
+
+[node name="StateMismatchesPanel" type="VBoxContainer" parent="MarginContainer/VBoxContainer/StateInputViewer/GridContainer"]
+layout_mode = 2
+
+[node name="StateMismatchesDataTree" type="Tree" parent="MarginContainer/VBoxContainer/StateInputViewer/GridContainer/StateMismatchesPanel"]
+layout_mode = 2
+column_titles_visible = true
 
 [node name="ReplayServer" type="Node" parent="."]
 script = ExtResource("5")

@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://58hro2kq3tlw"]
+[gd_scene load_steps=4 format=3 uid="uid://58hro2kq3tlw"]
 
 [ext_resource type="PackedScene" uid="uid://vf3gjk5tt6ih" path="res://addons/rollback_netcode/log_inspector/FrameDataGraph.tscn" id="2"]
+[ext_resource type="Script" path="res://addons/rollback_netcode/log_inspector/StateInputViewer.gd" id="2_ojjtv"]
 [ext_resource type="PackedScene" uid="uid://d3aa0ihjfmkb8" path="res://addons/rollback_netcode/log_inspector/FrameViewerSettingsDialog.tscn" id="3"]
 
 [node name="FrameViewer" type="Control"]
@@ -89,6 +90,13 @@ size_flags_vertical = 3
 
 [node name="DataGraph" parent="VBoxContainer/VSplitContainer" instance=ExtResource("2")]
 layout_mode = 2
+
+[node name="DataGrid" type="Control" parent="VBoxContainer/VSplitContainer"]
+layout_mode = 2
+
+[node name="StateInputViewer" type="Control" parent="VBoxContainer"]
+layout_mode = 2
+script = ExtResource("2_ojjtv")
 
 [node name="SettingsDialog" parent="." instance=ExtResource("3")]
 
