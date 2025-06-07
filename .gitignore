@@ -1,16 +1,39 @@
-# Godot 4+ specific ignores
+# Godot 4+ engine files
 .godot/
+.import/
 .nomedia
 
-# Godot-specific ignores
-.import/
+# Export config files (should be environment-specific)
 export.cfg
+export_presets.cfg
 export_credentials.cfg
 
-# Imported translations (automatically generated from CSV files)
+# Auto-generated translation files
 *.translation
 
-# Mono-specific ignores
+# Crash logs (rare but useful to ignore)
+mono_crash.*.json
+
+# Editor metadata (won’t affect runtime)
+*.tmp
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artifacts (in case of custom builds or tools)
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Mono (C#) files — leave these if you're using Mono
 .mono/
 data_*/
-mono_crash.*.json
+
+# Godot 4 Android/iOS build outputs (optional)
+android/build/
+ios/build/
+
