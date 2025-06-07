@@ -16,6 +16,7 @@ offset_bottom = 40.0
 
 [node name="TickNumber" type="LineEdit" parent="HBoxContainer"]
 layout_mode = 2
+text = "Tick: 0"
 
 [node name="GridContainer" type="GridContainer" parent="HBoxContainer"]
 layout_mode = 2

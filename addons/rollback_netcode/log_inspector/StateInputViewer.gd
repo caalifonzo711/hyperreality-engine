@@ -20,12 +20,43 @@ var log_data: LogData
 var replay_server: ReplayServer
 var replay_peer_id: int
 
+
+
 func _ready() -> void:
-	for tree in [input_mismatches_data_tree, state_mismatches_data_tree]:  
-		tree.set_columns(3)  # Ensure the tree has at least 3 columns  
-		tree.set_column_title(1, "Local")  
-		tree.set_column_title(2, "Remote")  
-		tree.set_column_titles_visible(true)  
+	print("👁️‍🗨️ StateInputViewer _ready running. Self path:", self.get_path())
+	
+	tick_number_field = get_node_or_null("HBoxContainer/TickNumber")
+	if tick_number_field:
+		#print("✅ TickNumber found:", tick_number_field)
+		print("✅ TickNumber found:", tick_number_field.get_path())
+
+	else:
+		push_warning("❌ TickNumber field not found")
+
+	var input_tree = get_node_or_null("GridContainer/InputPanel/InputDataTree")
+	if input_tree:
+		input_tree.clear()
+	else:
+		push_warning("⚠️ InputDataTree not found")
+
+	var input_mismatches_tree = get_node_or_null("GridContainer/InputMismatchesPanel/InputMismatchesDataTree")
+	if input_mismatches_tree:
+		input_mismatches_tree.clear()
+	else:
+		push_warning("⚠️ InputMismatchesDataTree not found")
+
+	var state_tree = get_node_or_null("GridContainer/StatePanel/StateDataTree")
+	if state_tree:
+		state_tree.clear()
+	else:
+		push_warning("⚠️ StateDataTree not found")
+
+	var state_mismatches_tree = get_node_or_null("GridContainer/StateMismatchesPanel/StateMismatchesDataTree")
+	if state_mismatches_tree:
+		state_mismatches_tree.clear()
+	else:
+		push_warning("⚠️ StateMismatchesDataTree not found")
+
 
 
 func set_log_data(_log_data: LogData) -> void:

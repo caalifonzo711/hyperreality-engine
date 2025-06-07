@@ -12,8 +12,19 @@ const LogData = preload("res://addons/rollback_netcode/log_inspector/LogData.gd"
 @onready var data_graph = $VBoxContainer/VSplitContainer/DataGraph
 @onready var data_grid = $VBoxContainer/VSplitContainer/DataGrid
 @onready var settings_dialog = $SettingsDialog
+#@onready var tick_label = $VBoxContainer/HBoxContainer/TickNumber
+#@onready var tick_label = $HBoxContainer/TickNumber
+#var tick_label  # no @onready here
+var tick_label = null  # declare globally, no @onready
 
-var log_data: LogData
+
+
+
+
+
+#var log_data: LogData
+var log_data  # <-- no type hint
+
 var replay_server: ReplayServer
 var replay_peer_id: int
 var replay_frame: int = -1
@@ -21,11 +32,22 @@ var replay_last_interpolation_frame_time: int = 0
 
 var current_frames := {}
 
-func set_log_data(_log_data: LogData) -> void:
+#trying someting out here 5/29/2024 5:24
+func _ready():
+	tick_label = get_node_or_null("HBoxContainer/TickNumber")
+	if tick_label:
+		tick_label.text = "Tick: 0"
+		tick_label.add_theme_color_override("font_color", Color.WHITE)
+	else:
+		push_warning("⚠️ FrameViewer: TickNumber label not found")
+		
+#func set_log_data(_log_data: LogData) -> void:
+func set_log_data(_log_data) -> void:
 	log_data = _log_data
-	data_graph.set_log_data(log_data)
-	data_grid.set_log_data(log_data)
-	settings_dialog.setup_settings_dialog(log_data, data_graph, data_grid)
+	current_frames[0] = 0  # Simulated peer 0 starts at frame 0
+	#data_graph.set_log_data(log_data)
+	#data_grid.set_log_data(log_data)
+	#settings_dialog.setup_settings_dialog(log_data, data_graph, data_grid)
 
 func refresh_from_log_data() -> void:
 	if log_data.is_loading():
@@ -115,30 +137,53 @@ func _on_NextFrameButton_pressed() -> void:
 	jump_to_next_frame()
 
 func jump_to_next_frame() -> void:
-	if log_data.is_loading():
+	# Skip if log_data is missing
+	if log_data == null:
 		return
 
-	var frame_time := log_data.end_time
+	# Fallback frame time
+	var frame_time = 0
 
+	# Determine next frame time
 	if seek_on_replay_peer_field.pressed:
 		frame_time = _get_next_frame_time_for_peer(replay_peer_id)
 	else:
 		for peer_id in current_frames:
 			var peer_frame_time = _get_next_frame_time_for_peer(peer_id)
 			if peer_frame_time != 0:
-				frame_time = int(min(frame_time, _get_next_frame_time_for_peer(peer_id)))
+				frame_time = int(min(frame_time, peer_frame_time))
 
+	# Adjust time_field for timeline visualization
 	if frame_time > log_data.start_time:
 		time_field.value = frame_time - log_data.start_time
 	else:
 		time_field.value = 0
 
+	# Visualize rollback frames
+	var current_tick = int(frame_time)
+	var current_frame: Dictionary = log_data.get_frame(0, current_tick)
+
+	# Safely update tick label if available
+	if tick_label:
+		if typeof(current_frame) == TYPE_DICTIONARY and current_frame.get("rollback_triggered", false):
+			tick_label.add_theme_color_override("font_color", Color.RED)
+		else:
+			tick_label.add_theme_color_override("font_color", Color.WHITE)
+
+		tick_label.text = "Tick: %d" % current_tick
+	else:
+		push_warning("⚠️ FrameViewer: tick_label is null during jump_to_next_frame")
+
+
 func _get_next_frame_time_for_peer(peer_id: int) -> int:
-	var frame_id = current_frames[peer_id]
+	#var frame_id = current_frames[peer_id]
+	var frame_id = current_frames.get(peer_id, 0)
 	if frame_id < log_data.get_frame_count(peer_id) - 1:
 		frame_id += 1
-		var frame: LogData.FrameData = log_data.get_frame(peer_id, frame_id)
-		return frame.start_time
+		#var frame: LogData.FrameData = log_data.get_frame(peer_id, frame_id)
+		var frame = log_data.get_frame(peer_id, frame_id)
+		#return frame.start_time
+		return frame.get("start_time", 0)
 	return 0
 
 func replay_to_current_frame() -> void:

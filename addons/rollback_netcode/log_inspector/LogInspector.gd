@@ -5,12 +5,14 @@ extends AcceptDialog
 const LogData = preload("res://addons/rollback_netcode/log_inspector/LogData.gd")
 const ReplayServer = preload("res://addons/rollback_netcode/log_inspector/ReplayServer.gd")
 
+const FakeLogData = preload("res://addons/rollback_netcode/log_inspector/FakeLogData.gd")
+
 @onready var file_dialog = $FileDialog
 @onready var progress_dialog = $ProgressDialog
 @onready var data_description_label = $MarginContainer/VBoxContainer/LoadToolbar/DataDescriptionLabel
 @onready var data_description_label_default_text = data_description_label.text
 @onready var mode_button = $MarginContainer/VBoxContainer/LoadToolbar/ModeButton
-@onready var state_input_viewer = $VBoxContainer/StateInputViewer
+@onready var state_input_viewer = $MarginContainer/VBoxContainer/StateInputViewer
 @onready var frame_viewer = $MarginContainer/VBoxContainer/FrameViewer
 @onready var replay_server = $ReplayServer
 @onready var replay_server_status_label = $MarginContainer/VBoxContainer/ReplayToolbar/ServerContainer/HBoxContainer/ReplayStatusLabel
@@ -32,41 +34,61 @@ var log_data: LogData = LogData.new()
 
 var _files_to_load := []
 
+
+
 func _ready() -> void:
-	print("DEBUG: LogInspector _ready() started!")  # ✅ This prints
+	print("DEBUG: LogInspector _ready() started!")
+
+	# Print current scene path (useful for debugging)
+	print("🧩 Scene path is:", get_tree().get_current_scene().scene_file_path)
+
+	# Find StateInputViewer
+	state_input_viewer = get_node_or_null("MarginContainer/VBoxContainer/StateInputViewer")
 	
-	# Manually reassigning to ensure correct node type
-	state_input_viewer = get_node("VBoxContainer/StateInputViewer")
 	
-	print("DEBUG: state_input_viewer assigned ->", state_input_viewer, "Type:", state_input_viewer.get_class())
-	#print("DEBUG: Before setting log data for state_input_viewer")  # ✅ If this prints, `state_input_viewer` is fine
-	#state_input_viewer.set_log_data(log_data)
-	#print("DEBUG: state_input_viewer is:", state_input_viewer, "Type:", state_input_viewer.get_class())   3-19-2025
-	#state_input_viewer.set_log_data(log_data)
 
-	
-	print("DEBUG: Before setting log data for frame_viewer")  # ✅ If this prints, `state_input_viewer` succeeded
-	print("frame_viewer is:", frame_viewer, "Type:", frame_viewer.get_class())  # 🔍 Debug output
-	frame_viewer.set_log_data(log_data)
+	if state_input_viewer:
+		print("✅ state_input_viewer assigned:", state_input_viewer, "Type:", state_input_viewer.get_class())
+		
+		# Optional: print VBoxContainer children under StateInputViewer
+		var vbox = state_input_viewer.get_node_or_null("HBoxContainer")
+		if vbox:
+			print("✅ VBoxContainer children at runtime:")
+			for c in vbox.get_children():
+				print("  • Child:", c.name)
+	else:
+		push_warning("❌ state_input_viewer not found in VBoxContainer!")
 
+	# -- 🕯️ Inject the Fake Log for testing (INSTEAD of real log loading) --
+	var fake_log = FakeLogData.new()
+	fake_log.generate_fake_log()
 
+	# Assign fake log to frame_viewer
+	frame_viewer.set_log_data(fake_log)
 
+	# (Optional later: assign fake log to state_input_viewer if needed)
+
+	# Setup replay server connection handlers
 	log_data.load_error.connect(self._on_log_data_load_error)
 	log_data.load_progress.connect(self._on_log_data_load_progress)
 	log_data.load_finished.connect(self._on_log_data_load_finished)
-	log_data.data_updated.connect(self.refresh_from_log_data)
+	#log_data.data_updated.connect(self._on_log_data_updated)
 
+	# Setup replay server links
 	state_input_viewer.set_replay_server(replay_server)
 	frame_viewer.set_replay_server(replay_server)
 
+	# Set file dialog default directory
 	file_dialog.current_dir = OS.get_user_data_dir() + "/detailed_logs/"
 
-	# Show and make full screen if the scene is being run on its own.
+	# Auto-start if running standalone
 	if get_parent() == get_tree().root:
 		visible = true
 		start_log_inspector()
 	else:
 		visible = false
+
+
 
 func _on_LogInspector_about_to_show() -> void:
 	start_log_inspector()
@@ -214,3 +236,28 @@ func _on_DisconnectButton_pressed() -> void:
 func _on_ShowPeerField_item_selected(index: int) -> void:
 	refresh_replay()
 	
+# ---------------------------------------------------------
+# 🚀 Auto Advance Simulation System
+# ---------------------------------------------------------
+
+# Called when AutoAdvanceTimer times out
+func _on_AutoAdvanceTimer_timeout() -> void:
+	_advance_frame()
+
+# Helper to safely ask FrameViewer to jump to next frame
+func _advance_frame():
+	if frame_viewer and frame_viewer.has_method("jump_to_next_frame"):
+		frame_viewer.jump_to_next_frame()
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		

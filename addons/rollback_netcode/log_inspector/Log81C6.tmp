@@ -155,10 +155,6 @@ layout_mode = 2
 [node name="ReplayServer" type="Node" parent="."]
 script = ExtResource("5")
 
-[node name="AutoAdvanceTimer" type="Timer" parent="."]
-wait_time = 0.2
-autostart = true
-
 [connection signal="about_to_popup" from="." to="." method="_on_LogInspector_about_to_show"]
 [connection signal="files_selected" from="FileDialog" to="." method="_on_FileDialog_files_selected"]
 [connection signal="pressed" from="MarginContainer/VBoxContainer/LoadToolbar/ClearButton" to="." method="_on_ClearButton_pressed"]
@@ -169,4 +165,3 @@ autostart = true
 [connection signal="pressed" from="MarginContainer/VBoxContainer/ReplayToolbar/ServerContainer/HBoxContainer/DisconnectButton" to="." method="_on_DisconnectButton_pressed"]
 [connection signal="pressed" from="MarginContainer/VBoxContainer/ReplayToolbar/ClientContainer/HBoxContainer/LaunchGameButton" to="." method="_on_LaunchGameButton_pressed"]
 [connection signal="item_selected" from="MarginContainer/VBoxContainer/ReplayToolbar/ClientContainer/HBoxContainer/ShowPeerField" to="." method="_on_ShowPeerField_item_selected"]
-[connection signal="timeout" from="AutoAdvanceTimer" to="." method="_on_AutoAdvanceTimer_timeout"]

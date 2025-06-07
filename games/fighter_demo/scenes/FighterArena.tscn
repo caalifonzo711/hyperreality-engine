@@ -1,0 +1,30 @@
+[gd_scene load_steps=2 format=3 uid="uid://cbwaxqhhnbm7s"]
+
+[ext_resource type="Script" path="res://games/fighter_demo/scripts/FighterGameManager.gd" id="1_d3ah1"]
+
+[node name="FighterArena" type="Node2D"]
+script = ExtResource("1_d3ah1")
+
+[node name="AttackButton" type="Button" parent="."]
+offset_left = 50.0
+offset_top = 50.0
+offset_right = 108.0
+offset_bottom = 81.0
+text = "Attack"
+
+[node name="DodgeButton" type="Button" parent="."]
+offset_left = 150.0
+offset_top = 50.0
+offset_right = 208.0
+offset_bottom = 81.0
+text = "Dodge"
+
+[node name="FighterTickLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 59.0
+offset_bottom = 33.0
+text = "Tick: 0"
+
+[connection signal="pressed" from="AttackButton" to="." method="_on_attack"]
+[connection signal="pressed" from="DodgeButton" to="." method="_on_dodge"]
