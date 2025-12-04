@@ -1,0 +1,165 @@
+[gd_scene load_steps=9 format=3 uid="uid://cbwaxqhhnbm7s"]
+
+[ext_resource type="Script" path="res://games/rollback_fighter/scripts/ecs/ArenaScene.gd" id="1_vh4xo"]
+[ext_resource type="Script" path="res://games/rollback_fighter/scripts/ui/DebugHUD.gd" id="2_7m30v"]
+[ext_resource type="Script" path="res://games/rollback_fighter/scripts/ui/HUD.gd" id="3_ggfo4"]
+[ext_resource type="Script" path="res://games/rollback_fighter/scripts/net/FighterRollbackAdapter.gd" id="4_5hyg5"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ice1a"]
+size = Vector2(20, 200)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_8h20x"]
+size = Vector2(21, 200)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ryp4x"]
+size = Vector2(800, 20)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ycm42"]
+size = Vector2(800, 21)
+
+[node name="FighterArena" type="Node2D"]
+script = ExtResource("1_vh4xo")
+use_netplay = true
+
+[node name="AttackButton" type="Button" parent="."]
+offset_left = 50.0
+offset_top = 50.0
+offset_right = 108.0
+offset_bottom = 81.0
+text = "Attack"
+
+[node name="DodgeButton" type="Button" parent="."]
+offset_left = 150.0
+offset_top = 50.0
+offset_right = 208.0
+offset_bottom = 81.0
+text = "Dodge"
+
+[node name="FighterTickLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 59.0
+offset_bottom = 33.0
+text = "Tick: 0"
+
+[node name="StageFloor" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 800.0
+offset_bottom = 400.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.646029, 0.646029, 0.646029, 1)
+
+[node name="Wall_Left" type="ColorRect" parent="."]
+offset_top = 100.0
+offset_right = 20.0
+offset_bottom = 300.0
+
+[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Left"]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Left/StaticBody2D"]
+position = Vector2(10, 100)
+shape = SubResource("RectangleShape2D_ice1a")
+
+[node name="Wall_Right" type="ColorRect" parent="."]
+offset_left = 780.0
+offset_top = 100.0
+offset_right = 800.0
+offset_bottom = 300.0
+
+[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Right"]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Right/StaticBody2D"]
+position = Vector2(10.5, 100)
+shape = SubResource("RectangleShape2D_8h20x")
+
+[node name="Wall_Top" type="ColorRect" parent="."]
+offset_right = 800.0
+offset_bottom = 20.0
+
+[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Top"]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Top/StaticBody2D"]
+position = Vector2(400, 10)
+shape = SubResource("RectangleShape2D_ryp4x")
+
+[node name="Wall_Bottom" type="ColorRect" parent="."]
+offset_top = 380.0
+offset_right = 800.0
+offset_bottom = 400.0
+
+[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Bottom"]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Bottom/StaticBody2D"]
+position = Vector2(400, 11.5)
+shape = SubResource("RectangleShape2D_ycm42")
+
+[node name="PlayerPlaceholder" type="Node2D" parent="."]
+position = Vector2(50, 1)
+
+[node name="ColorRect" type="ColorRect" parent="PlayerPlaceholder"]
+offset_right = 40.0
+offset_bottom = 40.0
+color = Color(1, 0, 0, 1)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(400, 200)
+
+[node name="DebugHUD" type="CanvasLayer" parent="."]
+script = ExtResource("2_7m30v")
+
+[node name="Control" type="Control" parent="DebugHUD"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="MarginContainer" type="MarginContainer" parent="DebugHUD/Control"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DebugHUD/Control/MarginContainer"]
+layout_mode = 2
+
+[node name="TickLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="PosLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="InputLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ReplayLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("3_ggfo4")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="HUD"]
+custom_minimum_size = Vector2(0, 40)
+offset_left = 85.0
+offset_top = 71.0
+offset_right = 462.0
+offset_bottom = 111.0
+size_flags_horizontal = 3
+
+[node name="P1Bar" type="ProgressBar" parent="HUD/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+step = 1.0
+
+[node name="P2Bar" type="ProgressBar" parent="HUD/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NetAdapter" type="Node" parent="."]
+script = ExtResource("4_5hyg5")
+
+[node name="GameManager" type="Node" parent="."]
+
+[connection signal="pressed" from="AttackButton" to="." method="_on_attack"]
+[connection signal="pressed" from="DodgeButton" to="." method="_on_dodge"]

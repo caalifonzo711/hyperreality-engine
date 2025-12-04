@@ -246,4 +246,3 @@ func add_timing(timer: String, msecs: float, accumulate: bool = false) -> void:
 			data['timings'][timer + '.max'] = msecs
 			data['timings'][timer + '.average'] = 0.0
 			data['timings'][timer + '.count'] = 1
-

@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3 uid="uid://badbs6poq0j1t"]
+
+[ext_resource type="Script" path="res://games/meme_wars/scripts/ZoneTile.gd" id="1_wqjer"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_7ft8l"]
+size = Vector3(1, 0.1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_on3rl"]
+shading_mode = 0
+albedo_color = Color(1, 0.172549, 0.129412, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_jqhc4"]
+size = Vector3(0.5, 0.05, 0.5)
+
+[node name="ZoneTile" type="Area3D"]
+script = ExtResource("1_wqjer")
+
+[node name="TileMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("BoxMesh_7ft8l")
+surface_material_override/0 = SubResource("StandardMaterial3D_on3rl")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_jqhc4")
+
+[connection signal="input_event" from="." to="." method="_on_input_event"]

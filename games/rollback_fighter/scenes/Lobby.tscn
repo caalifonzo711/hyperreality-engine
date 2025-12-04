@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://r44wp2di14pq"]
+
+[node name="Lobby" type="Node2D"]
+position = Vector2(54, 169)
+
+[node name="Panel" type="Panel" parent="."]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Label" type="Label" parent="Panel"]
+layout_mode = 0
+offset_left = -5.0
+offset_top = -141.0
+offset_right = 115.0
+offset_bottom = -73.0
+text = "text: \"Room ID\""
+
+[node name="LineEdit" type="LineEdit" parent="Panel"]
+layout_mode = 0
+offset_left = -8.0
+offset_top = -91.0
+offset_right = 381.0
+offset_bottom = -60.0
+text = "name: RoomField"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Panel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Button" type="Button" parent="Panel/HBoxContainer"]
+layout_mode = 2
+text = "name: HostBtn  text:\"Host\""
+
+[node name="Button2" type="Button" parent="Panel/HBoxContainer"]
+layout_mode = 2
+text = "name: JoinBtn  text:\"Join\""
+
+[node name="Label2" type="Label" parent="Panel"]
+layout_mode = 0
+offset_left = 14.0
+offset_top = 168.0
+offset_right = 336.0
+offset_bottom = 259.0
+text = "name: StatusLabel  text:\"Idle\""

@@ -1,0 +1,44 @@
+[gd_scene load_steps=2 format=3 uid="uid://bt8oepjj3wvv5"]
+
+[ext_resource type="Script" path="res://addons/hitbox_editor/HitboxEditor.gd" id="1_t1102"]
+
+[node name="HitboxEditor" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_t1102")
+sprite_folder = "res://games/rollback_fighter/characters/example_fighter/sprites"
+
+[node name="SpriteRect" type="TextureRect" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Overlay" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_force_pass_scroll_events = false
+
+[node name="UI" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="HitTypeButton" type="OptionButton" parent="UI"]
+layout_mode = 2
+
+[node name="PrevFrame" type="Button" parent="UI"]
+layout_mode = 2
+
+[node name="NextFrame" type="Button" parent="UI"]
+layout_mode = 2
+
+[node name="SaveButton" type="Button" parent="UI"]
+layout_mode = 2
+
+[connection signal="gui_input" from="." to="." method="_on_overlay_input"]
+[connection signal="draw" from="Overlay" to="." method="_on_overlay_draw"]
+[connection signal="gui_input" from="Overlay" to="." method="_on_overlay_input"]

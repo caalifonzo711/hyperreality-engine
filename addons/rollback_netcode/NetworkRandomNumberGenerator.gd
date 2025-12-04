@@ -29,4 +29,3 @@ func randi() -> int:
 
 func randi_range(from: int, to: int) -> int:
 	return generator.randi_range(from, to)
-

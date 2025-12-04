@@ -62,3 +62,21 @@ Thumbs.db
 logs/
 .cache/
 >>>>>>> e2d863e (DEPLOY: Initial commit, rollback netcode engine added.)
+# Godot
+.export/
+.import/
+*.translation
+*.import
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Secrets
+.env
+.env.*
+config/secret_*.cfg
