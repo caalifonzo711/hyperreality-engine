@@ -2,94 +2,166 @@ extends Node
 class_name CombatSystem
 
 # Wired by ArenaScene
-var player_state : PlayerState = null
-var target_state : PlayerState = null
+var p1_state: PlayerState = null
+var p2_state: PlayerState = null
 
 # --- damage / tuning ---
 const LIGHT_DMG       : int   = 5
 const HEAVY_DMG       : int   = 12
 
 # 1-D hitbox / hurtbox extents (all along X only)
-# Think of these as "half widths" of rectangles centered on the players.
-const HURTBOX_HALF    : float = 8.0    # target's body half-width
-const LIGHT_REACH     : float = 24.0   # extra reach of light attack
-const HEAVY_REACH     : float = 36.0   # extra reach of heavy attack
+const HURTBOX_HALF    : float = 8.0
+const LIGHT_REACH     : float = 24.0
+const HEAVY_REACH     : float = 36.0
 
-const LIGHT_COOLDOWN  : float = 0.18
-const HEAVY_COOLDOWN  : float = 0.45
-const KNOCK_X_LIGHT   : float = 28.0
-const KNOCK_X_HEAVY   : float = 46.0
-const HITSTOP_LIGHT   : int   = 2      # frames
+# Deterministic cooldowns (frames)
+const LIGHT_COOLDOWN_FRAMES : int = 11
+const HEAVY_COOLDOWN_FRAMES : int = 27
+
+# NOTE: These are now *impulse strengths* (vel.x += impulse), not teleport pixels
+const KNOCK_X_LIGHT   : float = 280.0
+const KNOCK_X_HEAVY   : float = 460.0
+
+const HITSTOP_LIGHT   : int   = 2
 const HITSTOP_HEAVY   : int   = 4
 
-var _light_cd       : float = 0.0
-var _heavy_cd       : float = 0.0
-var _hitstop_frames : int   = 0
+# Per-attacker cooldowns (so P1/P2 don't share one timer)
+var _light_cd_frames := { 1: 0, 2: 0 }
+var _heavy_cd_frames := { 1: 0, 2: 0 }
 
-func _process(delta: float) -> void:
-	# timers tick even if tick() isn't called
-	_light_cd = max(_light_cd - delta, 0.0)
-	_heavy_cd = max(_heavy_cd - delta, 0.0)
+# Shared hitstop freezes the whole fight (both players)
+var _hitstop_frames: int = 0
+
+
+func tick() -> void:
+	if p1_state == null or p2_state == null:
+		return
+
+	_tick_timers()
+
+	if _hitstop_frames > 0:
+		return
+
+	# Evaluate BOTH directions every tick
+	_eval_attacks(p1_state, p2_state)
+	_eval_attacks(p2_state, p1_state)
+
+
+func _tick_timers() -> void:
+	# hitstop
 	if _hitstop_frames > 0:
 		_hitstop_frames -= 1
 
-func tick() -> void:
-	if player_state == null or target_state == null:
-		return
-	if _hitstop_frames > 0:
+	# cooldown frames per attacker
+	for id in _light_cd_frames.keys():
+		_light_cd_frames[id] = maxi(_light_cd_frames[id] - 1, 0)
+	for id in _heavy_cd_frames.keys():
+		_heavy_cd_frames[id] = maxi(_heavy_cd_frames[id] - 1, 0)
+
+
+func _eval_attacks(attacker: PlayerState, defender: PlayerState) -> void:
+	var attacker_id: int = _get_pid(attacker)
+
+	# Only hit during ACTIVE frames
+	if not attacker.attack_active:
 		return
 
-	# LIGHT
-	if _pressed(player_state, "atk_l_pressed") and _light_cd <= 0.0:
-		if _in_range(LIGHT_REACH):
-			_do_damage(LIGHT_DMG, KNOCK_X_LIGHT, HITSTOP_LIGHT)
-			print("[Combat] LIGHT HIT! -", LIGHT_DMG, " HP  | target:", target_state.hp)
-		else:
-			print("[Combat] Light whiff.")
-		_light_cd = LIGHT_COOLDOWN
+	# Prevent multi-hit during ACTIVE window
+	if attacker.hit_confirmed:
+		return
 
-	# HEAVY
-	if _pressed(player_state, "atk_h_pressed") and _heavy_cd <= 0.0:
-		if _in_range(HEAVY_REACH):
-			_do_damage(HEAVY_DMG, KNOCK_X_HEAVY, HITSTOP_HEAVY)
-			print("[Combat] HEAVY HIT! -", HEAVY_DMG, " HP  | target:", target_state.hp)
-		else:
-			print("[Combat] Heavy whiff.")
-		_heavy_cd = HEAVY_COOLDOWN
+	# Choose stats from attack_kind
+	var reach: float = LIGHT_REACH
+	var dmg: int = LIGHT_DMG
+	var knock_impulse: float = KNOCK_X_LIGHT
+	var hitstop: int = HITSTOP_LIGHT
+
+	if attacker.attack_kind == PlayerState.AttackKind.HEAVY:
+		reach = HEAVY_REACH
+		dmg = HEAVY_DMG
+		knock_impulse = KNOCK_X_HEAVY
+		hitstop = HITSTOP_HEAVY
+
+	# Optional per-attack cooldown gates
+	if attacker.attack_kind == PlayerState.AttackKind.LIGHT:
+		if _light_cd_frames[attacker_id] > 0:
+			return
+	elif attacker.attack_kind == PlayerState.AttackKind.HEAVY:
+		if _heavy_cd_frames[attacker_id] > 0:
+			return
+
+	if _in_range(attacker, defender, reach):
+		_do_damage(attacker, defender, dmg, knock_impulse, hitstop)
+
+		# Start cooldown AFTER a successful hit (you can change to "on whiff too" later)
+		if attacker.attack_kind == PlayerState.AttackKind.LIGHT:
+			_light_cd_frames[attacker_id] = LIGHT_COOLDOWN_FRAMES
+		elif attacker.attack_kind == PlayerState.AttackKind.HEAVY:
+			_heavy_cd_frames[attacker_id] = HEAVY_COOLDOWN_FRAMES
+
 
 # --- 1-D hitbox check ---
-func _in_range(atk_reach: float) -> bool:
-	# distance between centers on X
-	var dx: float = abs(float(target_state.position.x - player_state.position.x))
-	# max allowed distance = target hurtbox half + attack reach
+func _in_range(attacker: PlayerState, defender: PlayerState, atk_reach: float) -> bool:
+	var dx: float = absf(defender.position.x - attacker.position.x)
 	var max_dist: float = HURTBOX_HALF + atk_reach
 	return dx <= max_dist
 
-func _do_damage(dmg: int, knock_px: float, hitstop_frames: int) -> void:
-	target_state.take_damage(dmg)
 
-	# knockback (push target away from attacker)
-	var dir: float = signf(target_state.position.x - player_state.position.x)
-	if dir == 0.0:
-		dir = 1.0
-	target_state.position.x += dir * knock_px
+func _do_damage(attacker: PlayerState, defender: PlayerState, dmg: int, knock_impulse: float, hitstop_frames: int) -> void:
+	# Dodge / invulnerability check
+	if defender.invulnerable:
+		print("[Combat] DODGED!")
+		attacker.hit_confirmed = true
+		_hitstop_frames = 1
+		return
 
-	# tiny hitstop for chunkiness
+	# Mark hit confirmed so ACTIVE doesn't hit every frame
+	attacker.hit_confirmed = true
+
+	# BLOCK handling
+	if defender.state == PlayerState.MoveState.BLOCK:
+		dmg = int(dmg * 0.2)
+		defender.take_damage(dmg)
+		print("[Combat] BLOCKED!")
+	else:
+		defender.take_damage(dmg)
+
+		var dir: float = signf(defender.position.x - attacker.position.x)
+		if dir == 0.0:
+			dir = 1.0
+
+		defender.vel.x += dir * knock_impulse
+		defender.vel.x = clampf(defender.vel.x, -defender.max_knock_speed, defender.max_knock_speed)
+
 	_hitstop_frames = hitstop_frames
 
-# Prefer PlayerState boolean flags; fall back to raw Input names
-func _pressed(ps: Node, field: String) -> bool:
-	var val: Variant = null
+	var attacker_id: int = _get_pid(attacker)
+	print("[Combat] P", attacker_id, " HIT! dmg=", dmg, "  target_hp=", defender.hp)
 
-	if ps != null:
-		# Node.get(name) in Godot 4 takes a single arg
-		val = ps.get(field)
+func _get_pid(ps: PlayerState) -> int:
+	# Prefer a real typed field if you add one later; fallback to reference equality.
+	# Avoids Variant inference warnings.
+	if ps.get("player_id") != null:
+		var v: Variant = ps.get("player_id")
+		if typeof(v) == TYPE_INT and int(v) != 0:
+			return int(v)
+	return 1 if ps == p1_state else 2
 
-	if typeof(val) == TYPE_BOOL:
-		return bool(val)
 
-	# fallback: translate to input action names
-	var action: String = field.replace("_pressed", "") \
-		.replace("atk_l", "light_attack") \
-		.replace("atk_h", "heavy_attack")
-	return Input.is_action_just_pressed(action)
+# --- rollback snapshot support for combat internals ---
+func capture_state() -> Dictionary:
+	return {
+		"hitstop": _hitstop_frames,
+		"light_cd_1": int(_light_cd_frames.get(1, 0)),
+		"light_cd_2": int(_light_cd_frames.get(2, 0)),
+		"heavy_cd_1": int(_heavy_cd_frames.get(1, 0)),
+		"heavy_cd_2": int(_heavy_cd_frames.get(2, 0)),
+	}
+
+func restore_state(s: Dictionary) -> void:
+	_hitstop_frames = int(s.get("hitstop", 0))
+
+	_light_cd_frames[1] = int(s.get("light_cd_1", 0))
+	_light_cd_frames[2] = int(s.get("light_cd_2", 0))
+	_heavy_cd_frames[1] = int(s.get("heavy_cd_1", 0))
+	_heavy_cd_frames[2] = int(s.get("heavy_cd_2", 0))

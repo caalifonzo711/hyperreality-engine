@@ -1,0 +1,6 @@
+{
+  "id": "jab",
+  "frames": ["jab_0.png", "jab_1.png"],
+  "fps": 12,
+  "loop": false
+}

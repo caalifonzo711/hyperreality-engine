@@ -1,6 +1,6 @@
 {
-  "frames": [
-	{ "index": 0, "hitboxes":[{"x":10,"y":20,"w":40,"h":40}], "hurtboxes":[] },
-	{ "index": 1, "hitboxes":[], "hurtboxes":[{"x":5,"y":18,"w":30,"h":60}] }
+  "move_id": "jab",
+  "boxes": [
+	{ "frame": 1, "type": "hit", "x": 30, "y": -40, "w": 40, "h": 20 }
   ]
 }

@@ -1,0 +1,9 @@
+{
+  "id": "jab",
+  "display_name": "Jab",
+  "animation": "jab",
+  "startup": 5,
+  "active": 2,
+  "recovery": 10,
+  "damage": 3
+}

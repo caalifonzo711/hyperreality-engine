@@ -1,7 +1,6 @@
 {
   "id": "example_fighter",
   "display_name": "Example Fighter",
-
   "portrait": "res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png",
 
   "animations": {
@@ -13,6 +12,16 @@
 	  "fps": 8,
 	  "loop": true
 	},
+
+	"walk": {
+	  "frames": [
+		"res://games/rollback_fighter/characters/example_fighter/sprites/walk_0.png",
+		"res://games/rollback_fighter/characters/example_fighter/sprites/walk_1.png"
+	  ],
+	  "fps": 10,
+	  "loop": true
+	},
+
 	"jab": {
 	  "frames": [
 		"res://games/rollback_fighter/characters/example_fighter/sprites/jab_0.png",
@@ -23,8 +32,5 @@
 	}
   },
 
-  "moves": [
-	"idle",
-	"jab"
-  ]
+  "moves": ["idle", "walk", "jab"]
 }

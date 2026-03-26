@@ -1,5 +1,5 @@
 @tool
-extends Control  # ✅ Correct! Now it will recognize the script properly.
+extends Control  # StateInputViewer.gd ✅ Correct! Now it will recognize the script properly.
 #@tool
 #extends VBoxContainer
 

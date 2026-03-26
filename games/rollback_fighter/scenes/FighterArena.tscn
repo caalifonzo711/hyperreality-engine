@@ -1,7 +1,9 @@
-[gd_scene load_steps=9 format=3 uid="uid://cbwaxqhhnbm7s"]
+[gd_scene load_steps=11 format=3 uid="uid://cbwaxqhhnbm7s"]
 
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/ecs/ArenaScene.gd" id="1_vh4xo"]
+[ext_resource type="Texture2D" uid="uid://b0bmbthqes3hh" path="res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png" id="2_3yeda"]
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/ui/DebugHUD.gd" id="2_7m30v"]
+[ext_resource type="Script" path="res://games/rollback_fighter/scripts/PlayerSpriteDebug.gd" id="2_7wkn7"]
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/ui/HUD.gd" id="3_ggfo4"]
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/net/FighterRollbackAdapter.gd" id="4_5hyg5"]
 
@@ -19,7 +21,6 @@ size = Vector2(800, 21)
 
 [node name="FighterArena" type="Node2D"]
 script = ExtResource("1_vh4xo")
-use_netplay = true
 
 [node name="AttackButton" type="Button" parent="."]
 offset_left = 50.0
@@ -102,7 +103,11 @@ position = Vector2(50, 1)
 [node name="ColorRect" type="ColorRect" parent="PlayerPlaceholder"]
 offset_right = 40.0
 offset_bottom = 40.0
-color = Color(1, 0, 0, 1)
+color = Color(1, 0, 0, 0.329412)
+
+[node name="PlayerSprite" type="Sprite2D" parent="PlayerPlaceholder"]
+texture = ExtResource("2_3yeda")
+script = ExtResource("2_7wkn7")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(400, 200)
