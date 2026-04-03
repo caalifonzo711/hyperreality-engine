@@ -1,21 +1,21 @@
-Business Source License 1.1
+MIT License
 
-Licensor: Alonso Rojas
+Copyright (c) 2026 caalifonzo711
 
-Licensed Work: The Hyperreality Engine and associated source code in this repository.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Change Date: June 6, 2028 (or whenever you want to open source it — can be changed later)
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Terms:
-
-The Licensed Work is made available under the terms of the Business Source License 1.1. You may view, copy, and modify the source code for evaluation, development, or testing purposes.
-
-However, **any use of the Licensed Work in a production environment, commercial product, or enterprise system is strictly prohibited without a separate commercial license agreement** from the Licensor.
-
-After the Change Date, this license will automatically convert to the Apache 2.0 License (or another OSI-approved license if specified by the Licensor).
-
-For commercial licensing, please contact:
-arrojas@uci.com
-
-Full license text: https://mariadb.com/bsl11
-
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
