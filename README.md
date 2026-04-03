@@ -6,7 +6,7 @@ A deterministic, rollback-ready simulation framework built in Godot.
 
 ---
 
-## Demo
+## Demo (hand-drawn indie game coming soon!) 
 
 ![Video Project](https://github.com/user-attachments/assets/98164da6-bc40-4574-aa19-e02dcefdd80a)
 
