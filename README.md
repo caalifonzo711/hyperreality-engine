@@ -113,8 +113,6 @@ Same core → different feel.
 
 ## Architecture
 
-## Architecture
-
 The project is structured around a deterministic simulation core.
 
 - `ArenaScene` coordinates the demo
