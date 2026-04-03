@@ -275,7 +275,7 @@ This is:
 * an indie game passion project
 * an evil plan to take over the world 
   
-```Have fun, Happy coding!
+Have fun, Happy coding!
 
 ## 🧠 Common Questions (Especially from OSS / Linux folks)
 
