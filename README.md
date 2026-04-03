@@ -305,7 +305,7 @@ What’s missing:
 - real network transport (e.g. WebRTC / sockets)
 
 Right now the system is:
-→ **rollback-ready**, not fully networked yet
+→ **rollback-ready**, not fully networked yet (almost done!) 
 
 ---
 
