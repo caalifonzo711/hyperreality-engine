@@ -214,7 +214,7 @@ Potential uses:
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourname/yourrepo
+git clone https://github.com/caalifonzo711/hyperreality-engine.git
 ```
 
 Open in Godot and run:
