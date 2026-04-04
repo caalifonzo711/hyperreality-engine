@@ -3,6 +3,7 @@
 A deterministic, rollback-ready simulation framework built in Godot.
 
 > Minimal core. Deterministic by design. Rollback from first principles.
+>
 > contact: https://www.linkedin.com/in/alonso-rojas-617546126/
 
 ---
