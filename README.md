@@ -168,8 +168,6 @@ Result:
 
 ## Debug / Validation
 
-![Debug Overlay](./docs/debug_overlay.png)
-
 Includes:
 
 * tick-level inspection
