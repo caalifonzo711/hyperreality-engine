@@ -12,6 +12,17 @@ Only the rollback demo (FighterArena.tscn) is currently working.
 
 ![Video Project](https://github.com/user-attachments/assets/98164da6-bc40-4574-aa19-e02dcefdd80a)
 
+## Try this first
+
+1. Open `FighterArena.tscn`
+2. Press F6
+3. Try attacking and moving
+
+What to look for:
+- instant responsiveness
+- consistent hit behavior
+- rollback-safe interactions
+
 ## 🧠 What This Is
 
 This project provides a **deterministic simulation core** for real-time games.
