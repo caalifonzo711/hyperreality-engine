@@ -393,30 +393,3 @@ MIT
 built by Alonso Rojas
 linkedin: [https://www.linkedin.com/in/alonso-rojas-617546126/](https://www.linkedin.com/in/alonso-rojas-617546126/)
 
-```
-
----
-
-## 🧠 What changed (quick)
-
-- fixed broken AI artifact  
-- removed crypto red flag  
-- added **license section (CRITICAL)**  
-- tightened tone → more OSS-native  
-- added quick run section  
-- made it easier to skim  
-
----
-
-## 🐺 Final answer
-
-👉 This version will **pass the Linux engineer test**  
-👉 You can confidently post now  
-👉 You won’t get dismissed  
-
----
-
-If you want next:
-we can prep your **first 3 replies after posting** so you look locked-in immediately 😄
-```
-
