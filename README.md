@@ -3,12 +3,14 @@
 A deterministic, rollback-ready simulation framework built in Godot.
 
 > Minimal core. Deterministic by design. Rollback from first principles.
+> 
+> ⚠️ NOTE: AI / Gemini tools are not functional yet.
+Only the rollback demo (FighterArena.tscn) is currently working.
 ---
 
 ## Demo (hand-drawn indie game coming soon!) 
 
 ![Video Project](https://github.com/user-attachments/assets/98164da6-bc40-4574-aa19-e02dcefdd80a)
-
 
 ## 🧠 What This Is
 
