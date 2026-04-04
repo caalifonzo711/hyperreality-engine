@@ -10,10 +10,6 @@ A deterministic, rollback-ready simulation framework built in Godot.
 ![Video Project](https://github.com/user-attachments/assets/98164da6-bc40-4574-aa19-e02dcefdd80a)
 
 
-> Example: 2-player combat simulation with rollback-safe architecture
-
----
-
 ## 🧠 What This Is
 
 This project provides a **deterministic simulation core** for real-time games.
@@ -35,9 +31,11 @@ You can use this like a **toy / sandbox**.
 
 1. Go to:
 
+```
 
 games/rollback_fighter/characters/example_fighter/sprites/
 
+````
 
 2. Replace the `.png` files with your own:
 - your drawings
@@ -150,183 +148,275 @@ The project is structured around a deterministic simulation core.
                                       │   read-only      │
                                       │ visual output    │
                                       └──────────────────┘
-Rollback Model
+````
+
+---
+
+## Rollback Model
 
 Each frame:
 
-Input is buffered
-Simulation advances
-State is saved
-On mismatch → rollback + re-simulate
+1. Input is buffered
+2. Simulation advances
+3. State is saved
+4. On mismatch → rollback + re-simulate
 
 Result:
 → identical final state across runs
 
-Debug / Validation
+---
+
+## Debug / Validation
+
+![Debug Overlay](./docs/debug_overlay.png)
 
 Includes:
 
-tick-level inspection
-input tracking
-state verification
-Status
-Implemented
-deterministic simulation core
-local 2-player combat demo
-snapshot + restore
-In Progress
-online multiplayer (network transport)
-additional game demos
-Planned / Experimental
-AI-assisted tooling (Gemini integration)
-additional rollback-based projects
-Use Cases
+* tick-level inspection
+* input tracking
+* state verification
+
+---
+
+## Status
+
+### Implemented
+
+* deterministic simulation core
+* local 2-player combat demo
+* snapshot + restore
+
+### In Progress
+
+* online multiplayer (network transport)
+* additional game demos
+
+### Planned / Experimental
+
+* AI-assisted tooling (Gemini integration)
+* additional rollback-based projects
+
+---
+
+## Use Cases
 
 This is not limited to fighting games.
 
 Potential uses:
 
-fighting / action games
-RTS / tactics systems
-co-op physics games
-interactive systems
-Quick Start
+* fighting / action games
+* RTS / tactics systems
+* co-op physics games
+* interactive systems
+
+---
+
+## Quick Start
+
+```bash
 git clone https://github.com/yourname/yourrepo
+```
 
 Open in Godot and run:
 
+```
 FighterArena.tscn
-Run (Quick)
-Open in Godot 4.x
-Press F6 on FighterArena.tscn
-FAQ
+```
 
-Is this multiplayer?
+---
+
+## Run (Quick)
+
+1. Open in Godot 4.x
+2. Press F6 on `FighterArena.tscn`
+
+---
+
+## FAQ
+
+**Is this multiplayer?**
 Not yet — currently focused on deterministic correctness.
 
-Do I need to code to use it?
+**Do I need to code to use it?**
 No — you can swap art and experiment immediately.
 
-Is this just a fighting game?
+**Is this just a fighting game?**
 No — the combat demo is a reference for a reusable system.
 
-🧠 Common Questions (Especially from OSS / Linux folks)
-Is this actually deterministic across machines?
+---
+
+## 🧠 Common Questions (Especially from OSS / Linux folks)
+
+### Is this actually deterministic across machines?
 
 Yes — the simulation is designed around:
 
-fixed timestep (60 Hz)
-frame-based state updates
-explicit state (no hidden engine-side mutation)
+* fixed timestep (60 Hz)
+* frame-based state updates
+* explicit state (no hidden engine-side mutation)
 
 Current validation:
 
-rollback loopback produces identical final states
-snapshot + restore includes all gameplay-relevant variables
+* rollback loopback produces identical final states
+* snapshot + restore includes all gameplay-relevant variables
 
 Cross-machine validation is the next step.
 
-Is rollback fully implemented or just “planned”?
+---
+
+### Is rollback fully implemented or just “planned”?
 
 The core rollback pieces are implemented:
 
-snapshot
-restore
-deterministic simulation
+* snapshot
+* restore
+* deterministic simulation
 
 What’s missing:
 
-real network transport (e.g. WebRTC / sockets)
+* real network transport (e.g. WebRTC / sockets)
 
 → rollback-ready, not fully networked yet
 
-Why use this instead of built-in engine networking?
+---
+
+### Why use this instead of built-in engine networking?
 
 Most engine networking assumes:
 
-latency compensation
-interpolation
-server authority
+* latency compensation
+* interpolation
+* server authority
 
 This project explores:
 → deterministic simulation + rollback
 
 Which enables:
 
-instant responsiveness
-frame-accurate gameplay
-consistent results across clients
-Why Godot?
-open source
-lightweight
-fast iteration
-no engine-level constraints on simulation design
+* instant responsiveness
+* frame-accurate gameplay
+* consistent results across clients
+
+---
+
+### Why Godot?
+
+* open source
+* lightweight
+* fast iteration
+* no engine-level constraints on simulation design
 
 Goal:
 → keep the simulation model portable and understandable
 
-What exactly gets snapshotted?
+---
+
+### What exactly gets snapshotted?
 
 All gameplay-relevant state:
 
-position / velocity
-attack state + timers
-hit confirmation flags
-cooldowns
-hitstop
+* position / velocity
+* attack state + timers
+* hit confirmation flags
+* cooldowns
+* hitstop
 
 Rendering is NOT included.
 
-Is floating point determinism an issue?
+---
+
+### Is floating point determinism an issue?
 
 Potentially, yes.
 
 Current approach:
 
-controlled math usage
-deterministic update ordering
+* controlled math usage
+* deterministic update ordering
 
 Future:
 
-stricter constraints or fixed-point if needed
-Can I use this in my own project?
+* stricter constraints or fixed-point if needed
+
+---
+
+### Can I use this in my own project?
 
 Yes — that’s the goal.
 
 Currently:
 
-best used as a reference / starting point
-Is this production-ready?
+* best used as a reference / starting point
+
+---
+
+### Is this production-ready?
 
 Not yet.
 
 → working foundation + reference implementation
 
-Collaboration
+---
+
+## Collaboration
 
 If you're:
 
-building a game
-experimenting with rollback
-or just curious
+* building a game
+* experimenting with rollback
+* or just curious
 
 Open an issue or share feedback.
 
-Philosophy
+---
 
-Build small, deterministic systems that scale into anything.
+## Philosophy
+
+> Build small, deterministic systems that scale into anything.
 
 This is:
 
-a working demo
-a foundation for future games
-an indie experiment
+* a working demo
+* a foundation for future games
+* an indie experiment
 
 Have fun.
 
-License
+---
+
+## License
 
 MIT
 
+---
+
 built by Alonso Rojas
-linkedin: https://www.linkedin.com/in/alonso-rojas-617546126/
+linkedin: [https://www.linkedin.com/in/alonso-rojas-617546126/](https://www.linkedin.com/in/alonso-rojas-617546126/)
+
+```
+
+---
+
+## 🧠 What changed (quick)
+
+- fixed broken AI artifact  
+- removed crypto red flag  
+- added **license section (CRITICAL)**  
+- tightened tone → more OSS-native  
+- added quick run section  
+- made it easier to skim  
+
+---
+
+## 🐺 Final answer
+
+👉 This version will **pass the Linux engineer test**  
+👉 You can confidently post now  
+👉 You won’t get dismissed  
+
+---
+
+If you want next:
+we can prep your **first 3 replies after posting** so you look locked-in immediately 😄
+```
+
