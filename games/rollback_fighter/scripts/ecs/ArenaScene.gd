@@ -46,6 +46,10 @@ extends Node2D
 @onready var tick_label: Label     = get_node_or_null("FighterTickLabel")
 var _tick: int = 0
 
+# --- simulated latency test harness ---
+@export var simulated_remote_delay_frames: int = 6   # 6=~100ms, 9=~150ms, 12=~200ms
+var _remote_input_delay_queue: Array[Dictionary] = []
+
 # Rollback self-test config
 const TEST_TOTAL_FRAMES := 10
 const TEST_ROLLBACK_AT  := 5
@@ -59,6 +63,16 @@ var _lean_vis_x: float = 0.0
 var _using_net: bool = false
 const PHYS_DT := 1.0 / 60.0
 
+func _empty_input_payload() -> Dictionary:
+	return {
+		"mx": 0.0,
+		"lean_l": false,
+		"lean_r": false,
+		"atk_l": false,
+		"atk_h": false,
+		"block": false,
+		"dodge": false,
+	}
 
 func _find_bindable_sprite(root: Node) -> Node:
 	if root == null:
@@ -224,33 +238,65 @@ func _setup_netplay() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# When NOT using netplay, drive simulation locally.
+	# -----------------------------
+	# LOCAL MODE (with fake latency)
+	# -----------------------------
 	if not _using_net:
-		var local: Dictionary  = _collect_p1_input()
-		var remote: Dictionary = _collect_p2_input()
-		adapter.simulate(local, remote, PHYS_DT)
+		var local: Dictionary = _collect_p1_input()
+		var remote_now: Dictionary = _collect_p2_input()
 
-	# Visual sync (positions only)
+		# Add current remote input into queue
+		_remote_input_delay_queue.append(remote_now)
+
+		var remote_delayed: Dictionary
+
+		# If queue is long enough, pop delayed input
+		if _remote_input_delay_queue.size() > simulated_remote_delay_frames:
+			remote_delayed = _remote_input_delay_queue.pop_front()
+		else:
+			# Not enough history yet → empty input
+			remote_delayed = {
+				"mx": 0.0,
+				"lean_l": false,
+				"lean_r": false,
+				"atk_l": false,
+				"atk_h": false,
+				"block": false,
+				"dodge": false,
+			}
+
+		# Run simulation
+		adapter.simulate(local, remote_delayed, PHYS_DT)
+
+	# -----------------------------
+	# VISUAL SYNC (ALWAYS RUNS)
+	# -----------------------------
 	if p1_placeholder:
 		p1_placeholder.position = player_state.position
 	if p2_placeholder:
 		p2_placeholder.position = opponent_state.position
 
-	# Simple bounds/touching (visual-only)
+	# -----------------------------
+	# SIMPLE WALL CHECK
+	# -----------------------------
 	var px := player_state.position.x
 	var py := player_state.position.y
 	var touching := (px <= 0.0) or (px >= 800.0) or (py <= 0.0) or (py >= 400.0)
 	player_state.set_touching_wall(touching)
 
-	# Lean cam (P1)
+	# -----------------------------
+	# CAMERA LEAN
+	# -----------------------------
 	var target := float(player_state.lean_direction) * LEAN_OFFSET
 	_lean_vis_x = lerp(_lean_vis_x, target, clamp(LEAN_LERP_SPEED * delta, 0.0, 1.0))
 	if cam:
 		cam.offset = Vector2(_lean_vis_x, 0.0)
 
+	# -----------------------------
+	# UI UPDATES
+	# -----------------------------
 	_update_health_tint()
 	_update_combat_debug_hud()
-
 # ------------------------------------------------------------------
 # Netplay callbacks
 # ------------------------------------------------------------------

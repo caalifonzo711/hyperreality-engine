@@ -1,11 +1,11 @@
-[gd_scene load_steps=11 format=3 uid="uid://cbwaxqhhnbm7s"]
+[gd_scene format=3 uid="uid://cbwaxqhhnbm7s"]
 
-[ext_resource type="Script" path="res://games/rollback_fighter/scripts/ecs/ArenaScene.gd" id="1_vh4xo"]
-[ext_resource type="Texture2D" uid="uid://b0bmbthqes3hh" path="res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png" id="2_3yeda"]
-[ext_resource type="Script" path="res://games/rollback_fighter/scripts/ui/DebugHUD.gd" id="2_7m30v"]
-[ext_resource type="Script" path="res://games/rollback_fighter/scripts/PlayerSpriteDebug.gd" id="2_7wkn7"]
-[ext_resource type="Script" path="res://games/rollback_fighter/scripts/ui/HUD.gd" id="3_ggfo4"]
-[ext_resource type="Script" path="res://games/rollback_fighter/scripts/net/FighterRollbackAdapter.gd" id="4_5hyg5"]
+[ext_resource type="Script" uid="uid://wnofrygppivs" path="res://games/rollback_fighter/scripts/ecs/ArenaScene.gd" id="1_vh4xo"]
+[ext_resource type="Texture2D" uid="uid://cwsw0lo2c3uxm" path="res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png" id="2_3yeda"]
+[ext_resource type="Script" uid="uid://4rkycp50qkoc" path="res://games/rollback_fighter/scripts/ui/DebugHUD.gd" id="2_7m30v"]
+[ext_resource type="Script" uid="uid://gon43cbttlu0" path="res://games/rollback_fighter/scripts/PlayerSpriteDebug.gd" id="2_7wkn7"]
+[ext_resource type="Script" uid="uid://cutyblay3sxk0" path="res://games/rollback_fighter/scripts/ui/HUD.gd" id="3_ggfo4"]
+[ext_resource type="Script" uid="uid://circviosvlfcp" path="res://games/rollback_fighter/scripts/net/FighterRollbackAdapter.gd" id="4_5hyg5"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_ice1a"]
 size = Vector2(20, 200)
@@ -19,31 +19,31 @@ size = Vector2(800, 20)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_ycm42"]
 size = Vector2(800, 21)
 
-[node name="FighterArena" type="Node2D"]
+[node name="FighterArena" type="Node2D" unique_id=1768636422]
 script = ExtResource("1_vh4xo")
 
-[node name="AttackButton" type="Button" parent="."]
+[node name="AttackButton" type="Button" parent="." unique_id=312714479]
 offset_left = 50.0
 offset_top = 50.0
 offset_right = 108.0
 offset_bottom = 81.0
 text = "Attack"
 
-[node name="DodgeButton" type="Button" parent="."]
+[node name="DodgeButton" type="Button" parent="." unique_id=364532011]
 offset_left = 150.0
 offset_top = 50.0
 offset_right = 208.0
 offset_bottom = 81.0
 text = "Dodge"
 
-[node name="FighterTickLabel" type="Label" parent="."]
+[node name="FighterTickLabel" type="Label" parent="." unique_id=1870411374]
 offset_left = 10.0
 offset_top = 10.0
 offset_right = 59.0
 offset_bottom = 33.0
 text = "Tick: 0"
 
-[node name="StageFloor" type="ColorRect" parent="."]
+[node name="StageFloor" type="ColorRect" parent="." unique_id=1725991633]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -53,98 +53,98 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.646029, 0.646029, 0.646029, 1)
 
-[node name="Wall_Left" type="ColorRect" parent="."]
+[node name="Wall_Left" type="ColorRect" parent="." unique_id=1692778478]
 offset_top = 100.0
 offset_right = 20.0
 offset_bottom = 300.0
 
-[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Left"]
+[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Left" unique_id=1275569667]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Left/StaticBody2D"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Left/StaticBody2D" unique_id=1506010694]
 position = Vector2(10, 100)
 shape = SubResource("RectangleShape2D_ice1a")
 
-[node name="Wall_Right" type="ColorRect" parent="."]
+[node name="Wall_Right" type="ColorRect" parent="." unique_id=627053248]
 offset_left = 780.0
 offset_top = 100.0
 offset_right = 800.0
 offset_bottom = 300.0
 
-[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Right"]
+[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Right" unique_id=2135235813]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Right/StaticBody2D"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Right/StaticBody2D" unique_id=9694541]
 position = Vector2(10.5, 100)
 shape = SubResource("RectangleShape2D_8h20x")
 
-[node name="Wall_Top" type="ColorRect" parent="."]
+[node name="Wall_Top" type="ColorRect" parent="." unique_id=210371792]
 offset_right = 800.0
 offset_bottom = 20.0
 
-[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Top"]
+[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Top" unique_id=903600541]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Top/StaticBody2D"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Top/StaticBody2D" unique_id=431927612]
 position = Vector2(400, 10)
 shape = SubResource("RectangleShape2D_ryp4x")
 
-[node name="Wall_Bottom" type="ColorRect" parent="."]
+[node name="Wall_Bottom" type="ColorRect" parent="." unique_id=1576369282]
 offset_top = 380.0
 offset_right = 800.0
 offset_bottom = 400.0
 
-[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Bottom"]
+[node name="StaticBody2D" type="StaticBody2D" parent="Wall_Bottom" unique_id=530093078]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Bottom/StaticBody2D"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall_Bottom/StaticBody2D" unique_id=1949584606]
 position = Vector2(400, 11.5)
 shape = SubResource("RectangleShape2D_ycm42")
 
-[node name="PlayerPlaceholder" type="Node2D" parent="."]
+[node name="PlayerPlaceholder" type="Node2D" parent="." unique_id=1345866042]
 position = Vector2(50, 1)
 
-[node name="ColorRect" type="ColorRect" parent="PlayerPlaceholder"]
+[node name="ColorRect" type="ColorRect" parent="PlayerPlaceholder" unique_id=1314907106]
 offset_right = 40.0
 offset_bottom = 40.0
 color = Color(1, 0, 0, 0.329412)
 
-[node name="PlayerSprite" type="Sprite2D" parent="PlayerPlaceholder"]
+[node name="PlayerSprite" type="Sprite2D" parent="PlayerPlaceholder" unique_id=1365619579]
 texture = ExtResource("2_3yeda")
 script = ExtResource("2_7wkn7")
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1741896030]
 position = Vector2(400, 200)
 
-[node name="DebugHUD" type="CanvasLayer" parent="."]
+[node name="DebugHUD" type="CanvasLayer" parent="." unique_id=255741956]
 script = ExtResource("2_7m30v")
 
-[node name="Control" type="Control" parent="DebugHUD"]
+[node name="Control" type="Control" parent="DebugHUD" unique_id=83290790]
 layout_mode = 3
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="MarginContainer" type="MarginContainer" parent="DebugHUD/Control"]
+[node name="MarginContainer" type="MarginContainer" parent="DebugHUD/Control" unique_id=777737941]
 layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="DebugHUD/Control/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="DebugHUD/Control/MarginContainer" unique_id=2121876765]
 layout_mode = 2
 
-[node name="TickLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer"]
+[node name="TickLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer" unique_id=1721784828]
 layout_mode = 2
 
-[node name="PosLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer"]
+[node name="PosLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer" unique_id=481590844]
 layout_mode = 2
 
-[node name="InputLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer"]
+[node name="InputLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer" unique_id=25138286]
 layout_mode = 2
 
-[node name="ReplayLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer"]
+[node name="ReplayLabel" type="Label" parent="DebugHUD/Control/MarginContainer/VBoxContainer" unique_id=309351530]
 layout_mode = 2
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=472116443]
 script = ExtResource("3_ggfo4")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="HUD"]
+[node name="HBoxContainer" type="HBoxContainer" parent="HUD" unique_id=8373508]
 custom_minimum_size = Vector2(0, 40)
 offset_left = 85.0
 offset_top = 71.0
@@ -152,19 +152,19 @@ offset_right = 462.0
 offset_bottom = 111.0
 size_flags_horizontal = 3
 
-[node name="P1Bar" type="ProgressBar" parent="HUD/HBoxContainer"]
+[node name="P1Bar" type="ProgressBar" parent="HUD/HBoxContainer" unique_id=1380913777]
 layout_mode = 2
 size_flags_horizontal = 3
 step = 1.0
 
-[node name="P2Bar" type="ProgressBar" parent="HUD/HBoxContainer"]
+[node name="P2Bar" type="ProgressBar" parent="HUD/HBoxContainer" unique_id=1833094131]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="NetAdapter" type="Node" parent="."]
+[node name="NetAdapter" type="Node" parent="." unique_id=388960740]
 script = ExtResource("4_5hyg5")
 
-[node name="GameManager" type="Node" parent="."]
+[node name="GameManager" type="Node" parent="." unique_id=985789873]
 
 [connection signal="pressed" from="AttackButton" to="." method="_on_attack"]
 [connection signal="pressed" from="DodgeButton" to="." method="_on_dodge"]
