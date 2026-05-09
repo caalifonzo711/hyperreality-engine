@@ -168,6 +168,31 @@ func _update_health_tint() -> void:
 		p2_placeholder.modulate = Color(1.0, g2, g2, 1.0)
 
 
+#func _update_rollback_debug_hud() -> void:
+#	if rollback_session == null:
+#		return
+
+	#if debug_tick_label:
+	#	debug_tick_label.text = "Frame: %d | Player ID: %d" % [
+	#		int(rollback_session.current_frame),
+	#		local_player_id
+	#	]
+
+	#var mode_text := "ENet"
+	#if not USE_ENET:
+	#	mode_text = "LatencyHarness"
+
+	#if debug_replay_label:
+	#	debug_replay_label.text = (
+		#	"Mode=%s | Connected=%s\nRollback count=%d | Max depth=%d | Misses=%d"
+	#	) % [
+	#		mode_text,
+	#		str(transport.get("is_connected") if transport != null and transport.get("is_connected") != null else false),
+	#		int(rollback_session.rollback_count),
+	#		int(rollback_session.max_rollback_depth),
+	#		int(rollback_session.prediction_misses)
+	#	]
+
 func _update_rollback_debug_hud() -> void:
 	if rollback_session == null:
 		return
@@ -182,17 +207,24 @@ func _update_rollback_debug_hud() -> void:
 	if not USE_ENET:
 		mode_text = "LatencyHarness"
 
+	var connected := false
+	if transport != null and transport.get("is_connected") != null:
+		connected = bool(transport.get("is_connected"))
+
 	if debug_replay_label:
 		debug_replay_label.text = (
-			"Mode=%s | Connected=%s\nRollback count=%d | Max depth=%d | Misses=%d"
+			"Mode=%s | Connected=%s\n" +
+			"Packets=%d | LastRemoteFrame=%d\n" +
+			"Rollback count=%d | Max depth=%d | Misses=%d"
 		) % [
 			mode_text,
-			str(transport.get("is_connected") if transport != null and transport.get("is_connected") != null else false),
+			str(connected),
+			int(rollback_session.packets_received),
+			int(rollback_session.last_remote_frame),
 			int(rollback_session.rollback_count),
 			int(rollback_session.max_rollback_depth),
 			int(rollback_session.prediction_misses)
 		]
-
 
 func _update_combat_debug_hud() -> void:
 	if debug_pos_label:
