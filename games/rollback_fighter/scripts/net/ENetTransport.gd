@@ -63,8 +63,19 @@ func _process(_delta: float) -> void:
 	if multiplayer.multiplayer_peer:
 		multiplayer.poll()
 
+#func send_packet(packet: Dictionary) -> void:
+	#if multiplayer.multiplayer_peer == null:
+	#	return
+
+	#if is_host:
+	#	_rpc_receive_packet.rpc(packet)
+	#else:
+	#	_rpc_receive_packet.rpc_id(1, packet)
 func send_packet(packet: Dictionary) -> void:
 	if multiplayer.multiplayer_peer == null:
+		return
+
+	if not is_connected:
 		return
 
 	if is_host:
