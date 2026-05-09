@@ -56,6 +56,13 @@ func setup(_adapter: FighterRollbackAdapter, _transport: Node, _player_id: int =
 			transport.packet_received.connect(_on_packet_received)
 
 
+func _simulate_frame(local_input: Dictionary, remote_input: Dictionary) -> void:
+	if player_id == 1:
+		adapter.simulate(local_input, remote_input, PHYS_DT)
+	else:
+		adapter.simulate(remote_input, local_input, PHYS_DT)
+
+
 func tick(local_input: Dictionary) -> void:
 	if adapter == null:
 		return
@@ -84,16 +91,20 @@ func tick(local_input: Dictionary) -> void:
 	snapshots[current_frame] = adapter.capture()
 
 	var old_frame: int = current_frame - MAX_ROLLBACK_FRAMES
+
 	if snapshots.has(old_frame):
 		snapshots.erase(old_frame)
+
 	if local_inputs.has(old_frame):
 		local_inputs.erase(old_frame)
+
 	if remote_inputs.has(old_frame):
 		remote_inputs.erase(old_frame)
+
 	if predicted_remote_inputs.has(old_frame):
 		predicted_remote_inputs.erase(old_frame)
 
-	adapter.simulate(local_input, remote_input, PHYS_DT)
+	_simulate_frame(local_input, remote_input)
 
 	current_frame += 1
 
@@ -158,7 +169,8 @@ func _rollback_and_replay(from_frame: int) -> void:
 			remote_input = _predict_remote_input(replay_frame)
 
 		snapshots[replay_frame] = adapter.capture()
-		adapter.simulate(local_input, remote_input, PHYS_DT)
+
+		_simulate_frame(local_input, remote_input)
 
 		replay_frame += 1
 
