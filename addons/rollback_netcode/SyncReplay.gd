@@ -160,4 +160,3 @@ func _do_execute_frame(msg: Dictionary) -> void:
 
 		_:
 			SyncManager.reset_mechanized_data()
-

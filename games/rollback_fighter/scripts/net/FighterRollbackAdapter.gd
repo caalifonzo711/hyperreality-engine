@@ -165,7 +165,11 @@ func _snap(ps: PlayerState) -> Dictionary:
 		"dreq": ps.dodge_requested,
 		
 		# hurt ouchie
-		"hurt": ps.hurt_frames,
+"hurt": ps.hurt_frames,
+
+# rollback-critical transient flags
+"aa": ps.attack_active,
+"wall": ps.is_touching_wall,
 	}
 
 
@@ -195,4 +199,8 @@ func _restore(ps: PlayerState, d: Dictionary) -> void:
 	ps.dodge_requested = bool(d.get("dreq", false))
 	
 	#hurt owie
-	ps.hurt_frames    = int(d.get("hurt", 0))
+	ps.hurt_frames = int(d.get("hurt", 0))
+
+	# rollback-critical transient flags
+	ps.attack_active = bool(d.get("aa", false))
+	ps.is_touching_wall = bool(d.get("wall", false))

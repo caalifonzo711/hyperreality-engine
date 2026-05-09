@@ -7,15 +7,14 @@ func tick() -> void:
 	if player_state == null:
 		return
 
-	# Optional: Remove this if you want leaning in mid-air / not touching wall
 	if not player_state.is_touching_wall:
+		player_state.lean_direction = 0
 		return
 
-	if Input.is_action_pressed("lean_left"):
-		player_state.lean_direction = -1
-	elif Input.is_action_pressed("lean_right"):
-		player_state.lean_direction = 1
-	else:
-		player_state.lean_direction = 0
+	var ld := 0
+	if player_state.lean_l:
+		ld -= 1
+	if player_state.lean_r:
+		ld += 1
 
-	print("lean_dir =", player_state.lean_direction)
+	player_state.lean_direction = ld
