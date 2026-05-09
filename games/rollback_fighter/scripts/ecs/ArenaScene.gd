@@ -96,6 +96,16 @@ func _physics_process(delta: float) -> void:
 	_update_wall_state()
 
 	if rollback_session:
+		# In ENet mode, do not advance the rollback timeline until both peers connect.
+		if transport != null and transport.get("is_connected") != null:
+			if not bool(transport.get("is_connected")):
+				_update_visuals()
+				_update_camera(delta)
+				_update_health_tint()
+				_update_combat_debug_hud()
+				_update_rollback_debug_hud()
+				return
+
 		var local_input: Dictionary = _collect_local_input()
 		rollback_session.tick(local_input)
 
@@ -104,7 +114,6 @@ func _physics_process(delta: float) -> void:
 	_update_health_tint()
 	_update_combat_debug_hud()
 	_update_rollback_debug_hud()
-
 
 func _collect_local_input() -> Dictionary:
 	var mx := Input.get_action_strength("p1_right") - Input.get_action_strength("p1_left")

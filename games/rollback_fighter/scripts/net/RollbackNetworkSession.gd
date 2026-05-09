@@ -44,7 +44,8 @@ var _last_remote_input: Dictionary = {
 	"block": false,
 	"dodge": false,
 }
-
+var packets_received: int = 0
+var last_remote_frame: int = -1
 
 func setup(_adapter: FighterRollbackAdapter, _transport: Node, _player_id: int = 1) -> void:
 	adapter = _adapter
@@ -115,10 +116,35 @@ func _predict_remote_input(frame: int) -> Dictionary:
 	return predicted
 
 
+#func _on_packet_received(packet: Dictionary) -> void:
+#	if packet.get("type", "") != "input":
+	#	return
+
+#	if int(packet.get("player_id", -1)) == player_id:
+	#	return
+
+	#var frame: int = int(packet.get("frame", -1))
+#	var input_data: Dictionary = packet.get("input", {})
+
+#	if frame < 0:
+#		return
+
+	#remote_inputs[frame] = input_data.duplicate(true)
+
+#	if frame >= current_frame:
+	#	return
+
+	#if predicted_remote_inputs.has(frame):
+	#	var predicted: Dictionary = predicted_remote_inputs[frame]
+
+	#	if predicted.hash() != input_data.hash():
+	#		prediction_misses += 1
+	#		_rollback_and_replay(frame)
 func _on_packet_received(packet: Dictionary) -> void:
 	if packet.get("type", "") != "input":
 		return
 
+	# Ignore our own echoed packets
 	if int(packet.get("player_id", -1)) == player_id:
 		return
 
@@ -128,11 +154,25 @@ func _on_packet_received(packet: Dictionary) -> void:
 	if frame < 0:
 		return
 
+	# -----------------------------
+	# Packet metrics
+	# -----------------------------
+	packets_received += 1
+	last_remote_frame = frame
+
+	# -----------------------------
+	# Store remote input
+	# -----------------------------
 	remote_inputs[frame] = input_data.duplicate(true)
 
+	# If packet is for current/future frame,
+	# no rollback required yet.
 	if frame >= current_frame:
 		return
 
+	# -----------------------------
+	# Prediction miss detection
+	# -----------------------------
 	if predicted_remote_inputs.has(frame):
 		var predicted: Dictionary = predicted_remote_inputs[frame]
 
