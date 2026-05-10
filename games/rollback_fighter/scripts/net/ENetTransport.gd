@@ -5,6 +5,7 @@ signal packet_received(packet: Dictionary)
 signal connected()
 signal disconnected()
 signal connection_failed(reason: String)
+signal start_match_received() #timemachine
 
 @export var port: int = 7777
 @export var max_clients: int = 1
@@ -12,6 +13,8 @@ signal connection_failed(reason: String)
 var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 var is_host: bool = false
 var is_connected: bool = false
+
+var remote_peer_id: int = 0#timemachine
 
 func host(host_port: int = 7777) -> void:
 	port = host_port
@@ -71,6 +74,17 @@ func _process(_delta: float) -> void:
 	#	_rpc_receive_packet.rpc(packet)
 	#else:
 	#	_rpc_receive_packet.rpc_id(1, packet)
+#func send_packet(packet: Dictionary) -> void:
+	#if multiplayer.multiplayer_peer == null:
+	#	return
+
+	#if not is_connected:
+	#	return
+
+	#if is_host:
+	#	_rpc_receive_packet.rpc(packet)
+	#else:
+	#	_rpc_receive_packet.rpc_id(1, packet)
 func send_packet(packet: Dictionary) -> void:
 	if multiplayer.multiplayer_peer == null:
 		return
@@ -79,7 +93,9 @@ func send_packet(packet: Dictionary) -> void:
 		return
 
 	if is_host:
-		_rpc_receive_packet.rpc(packet)
+		if remote_peer_id == 0:
+			return
+		_rpc_receive_packet.rpc_id(remote_peer_id, packet)
 	else:
 		_rpc_receive_packet.rpc_id(1, packet)
 
@@ -91,11 +107,14 @@ func _on_peer_connected(id: int) -> void:
 	print("[ENetTransport] Peer connected: %d" % id)
 	is_connected = true
 	connected.emit()
-
+	remote_peer_id = id
+	
 func _on_peer_disconnected(id: int) -> void:
 	print("[ENetTransport] Peer disconnected: %d" % id)
 	is_connected = false
 	disconnected.emit()
+	if remote_peer_id == id:
+		remote_peer_id = 0
 
 func _on_connected_to_server() -> void:
 	print("[ENetTransport] Connected to server")
@@ -109,3 +128,20 @@ func _on_connection_failed() -> void:
 func _on_server_disconnected() -> void:
 	is_connected = false
 	disconnected.emit()
+
+func send_start_match() -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if not is_connected:
+		return
+
+	if is_host:
+		if remote_peer_id == 0:
+			return
+		_rpc_start_match.rpc_id(remote_peer_id)
+	else:
+		_rpc_start_match.rpc_id(1)
+		
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_start_match() -> void:
+	start_match_received.emit()

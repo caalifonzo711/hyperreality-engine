@@ -87,14 +87,21 @@ func _ready() -> void:
 	add_child(rollback_session)
 	rollback_session.setup(adapter, transport, local_player_id)
 
+
 	if hud:
 		hud.set("p1_state", player_state)
 		hud.set("p2_state", opponent_state)
+	
+		if transport != null and transport.has_signal("start_match_received"):
+			if not transport.start_match_received.is_connected(_on_start_match_received):
+				transport.start_match_received.connect(_on_start_match_received)
 
 
 func _physics_process(delta: float) -> void:
 	_update_wall_state()
 
+	if rollback_session and not bool(rollback_session.match_started):
+		return
 	if rollback_session:
 		# In ENet mode, do not advance the rollback timeline until both peers connect.
 		if transport != null and transport.get("is_connected") != null:
@@ -299,11 +306,14 @@ func _bind_sprite_to_state(placeholder: Node, state: Node, label: String) -> voi
 
 	if sprite == null:
 		var stack: Array[Node] = [placeholder]
+
 		while stack.size() > 0 and sprite == null:
 			var n: Node = stack.pop_back()
+
 			if n != null and n.has_method("bind_state"):
 				sprite = n
 				break
+
 			for c in n.get_children():
 				if c is Node:
 					stack.append(c)
@@ -315,3 +325,21 @@ func _bind_sprite_to_state(placeholder: Node, state: Node, label: String) -> voi
 		sprite.set("debug_label", label)
 
 	sprite.call("bind_state", state)
+
+
+func _on_start_match_received() -> void:
+	print("[Arena] start_match received. Starting rollback session.")
+
+	if rollback_session != null:
+		rollback_session.start_session()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_accept"):
+		if transport != null and transport.has_method("send_start_match"):
+			print("[Arena] Host sending start_match.")
+
+			if rollback_session != null:
+				rollback_session.start_session()
+
+			transport.send_start_match()

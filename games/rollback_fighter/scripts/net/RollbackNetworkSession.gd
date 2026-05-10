@@ -26,6 +26,8 @@ var rollback_count: int = 0
 var max_rollback_depth: int = 0
 var prediction_misses: int = 0
 
+#timemachine
+var match_started: bool = false
 # -----------------------------
 # Dependencies
 # -----------------------------
@@ -47,6 +49,24 @@ var _last_remote_input: Dictionary = {
 var packets_received: int = 0
 var last_remote_frame: int = -1
 
+func reset_session() -> void:
+	current_frame = 0
+	local_inputs.clear()
+	remote_inputs.clear()
+	predicted_remote_inputs.clear()
+	snapshots.clear()
+	rollback_count = 0
+	max_rollback_depth = 0
+	prediction_misses = 0
+	packets_received = 0
+	last_remote_frame = -1
+	match_started = false
+
+func start_session() -> void:
+	reset_session()
+	match_started = true
+	
+	
 func setup(_adapter: FighterRollbackAdapter, _transport: Node, _player_id: int = 1) -> void:
 	adapter = _adapter
 	transport = _transport
@@ -67,7 +87,8 @@ func _simulate_frame(local_input: Dictionary, remote_input: Dictionary) -> void:
 func tick(local_input: Dictionary) -> void:
 	if adapter == null:
 		return
-
+	if not match_started:
+		return
 	if transport and transport.has_method("tick"):
 		transport.tick()
 
