@@ -1,9 +1,10 @@
-[gd_scene load_steps=11 format=3 uid="uid://cbwaxqhhnbm7s"]
+[gd_scene load_steps=12 format=3 uid="uid://cbwaxqhhnbm7s"]
 
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/ecs/ArenaScene.gd" id="1_vh4xo"]
 [ext_resource type="Texture2D" uid="uid://b0bmbthqes3hh" path="res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png" id="2_3yeda"]
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/ui/DebugHUD.gd" id="2_7m30v"]
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/PlayerSpriteDebug.gd" id="2_7wkn7"]
+[ext_resource type="Texture2D" uid="uid://cv0p8jbo3c0v7" path="res://games/rollback_fighter/characters/example_fighter/sprites/Screenshot 2026-05-12 145345.png" id="2_gxfc1"]
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/ui/HUD.gd" id="3_ggfo4"]
 [ext_resource type="Script" path="res://games/rollback_fighter/scripts/net/FighterRollbackAdapter.gd" id="4_5hyg5"]
 
@@ -43,15 +44,18 @@ offset_right = 59.0
 offset_bottom = 33.0
 text = "Tick: 0"
 
-[node name="StageFloor" type="ColorRect" parent="."]
+[node name="StageFloor" type="TextureRect" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_right = 800.0
-offset_bottom = 400.0
+offset_left = -146.0
+offset_top = -86.0
+offset_right = 2412.0
+offset_bottom = 1149.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.646029, 0.646029, 0.646029, 1)
+scale = Vector2(0.4, 0.4)
+texture = ExtResource("2_gxfc1")
 
 [node name="Wall_Left" type="ColorRect" parent="."]
 offset_top = 100.0
