@@ -1,4 +1,3 @@
-````md
 # Hyperreality Rollback Engine
 
 A deterministic, rollback-ready simulation framework built in Godot.
@@ -11,7 +10,8 @@ Now featuring:
 - rollback correction metrics
 - hand-drawn animated combat demo with updated color art
 
-<img width="426" height="240" alt="Video Project 3" src="https://github.com/user-attachments/assets/fe26070a-5e62-400c-bb36-d789d87bc1f4" />
+<img width="426" height="240" alt="Video Project 3" src="https://github.com/user-attachments/assets/556343c1-8d41-4d70-9477-9be47c21a5bc" />
+
 
 
 ⚠️ NOTE:
