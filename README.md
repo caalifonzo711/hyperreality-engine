@@ -11,7 +11,8 @@ Now featuring:
 - rollback correction metrics
 - hand-drawn animated combat demo with updated color art
 
-https://1drv.ms/i/c/535a1d3e9a6c6030/IQCSXtt1y64DS7mEWv-XQTY9AdpV8y4s8adpMd0Kqwu7_bo?e=MgQRaO
+<img width="426" height="240" alt="Video Project 3" src="https://github.com/user-attachments/assets/fe26070a-5e62-400c-bb36-d789d87bc1f4" />
+
 
 ⚠️ NOTE:
 AI / Gemini tooling is still experimental.
