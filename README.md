@@ -1,133 +1,200 @@
+````md
 # Hyperreality Rollback Engine
 
 A deterministic, rollback-ready simulation framework built in Godot.
 
 > Minimal core. Deterministic by design. Rollback from first principles.
-> 
-> ⚠️ NOTE: AI / Gemini tools are not functional yet.
-Only the rollback demo (FighterArena.tscn) is currently working.
----
 
-## Demo (hand-drawn indie game coming soon!) 
+Now featuring:
+- synchronized two-PC rollback prototype over ENet
+- frame-indexed input prediction + replay
+- rollback correction metrics
+- hand-drawn animated combat demo with updated color art
 
-![Video Project](https://github.com/user-attachments/assets/98164da6-bc40-4574-aa19-e02dcefdd80a)
+https://1drv.ms/i/c/535a1d3e9a6c6030/IQCSXtt1y64DS7mEWv-XQTY9AdpV8y4s8adpMd0Kqwu7_bo?e=MgQRaO
 
-## Try this first
+⚠️ NOTE:
+AI / Gemini tooling is still experimental.
 
-1. Open `FighterArena.tscn`
-2. Press F6
-3. Try attacking and moving
-
-What to look for:
-- instant responsiveness
-- consistent hit behavior
-- rollback-safe interactions
-
-## 🧠 What This Is
-
-This project provides a **deterministic simulation core** for real-time games.
-
-It is designed to:
-- guarantee identical outcomes across machines
-- support rollback-based multiplayer
-- be reused across different types of games
-
-The included combat demo is a **reference implementation**.
+The rollback fighter demo is currently the primary working showcase.
 
 ---
 
-## 🎮 Just Want to Try It? (No Coding Required)
+# 🎮 Current Demo — Rollback Fighter Prototype
 
-You can use this like a **toy / sandbox**.
+The project now includes a working two-computer rollback prototype.
 
-### ✨ Replace the art with your own
+Current features:
+- synchronized two-PC rollback sessions
+- frame-indexed input packets
+- prediction + replay
+- rollback metrics HUD
+- synchronized match start
+- rollback-safe combat state
+- updated hand-drawn color character art
+- deterministic combat simulation
 
-1. Go to:
+The original prototype used programmer placeholder drawings.
 
-```
+The current version now includes:
+- colored character sprites
+- stage art integration
+- animated fighter placeholders
+- early indie game presentation polish
 
-games/rollback_fighter/characters/example_fighter/sprites/
+Still intentionally lightweight while networking systems are stabilized.
 
+---
+
+# 🚀 Quick Start
+
+## Clone
+
+```bash
+git clone https://github.com/caalifonzo711/hyperreality-engine.git
 ````
 
-2. Replace the `.png` files with your own:
-- your drawings
-- pixel art
-- AI-generated images
-- literally anything
-
-3. Keep the same filenames (or update paths if you know how)
-
-4. Run the project
-
-👉 That’s it — you now have your own animated, interactive character.
+Open in Godot 4.x.
 
 ---
 
-### 🧪 What you’ll see
+# ▶️ Run Local Demo
 
-- Your character moves  
-- Attacks trigger  
-- Hit reactions happen  
-- Everything runs in a **deterministic simulation**
+Open:
 
-No coding required to experiment.
+```text
+FighterArena.tscn
+```
 
----
+Press:
 
-## 🔄 What is Rollback? (Simple Explanation)
+```text
+F6
+```
 
-Most games:
-- lag = everything slows down
+You can immediately:
 
-Rollback works differently:
-
-👉 The game **keeps running instantly**, then fixes mistakes afterward.
-
-### Concept:
-
-1. You press a button  
-2. Game responds immediately  
-3. If the other player's input arrives late:
-   - game rewinds a few frames
-   - re-simulates correctly  
-
-You don’t notice — it feels smooth.
+* move
+* attack
+* block
+* dodge
+* test rollback-safe combat interactions
 
 ---
 
-### Why this matters
+# 🌐 Run Two-PC Rollback Test
 
-This system can be tuned for:
+Desktop:
 
-- ⚔️ melee combat  
-- 🥊 fighting games (frame-perfect timing)  
-- 🎮 action games  
-- 🧠 strategy systems  
+```gdscript
+const ENET_HOST := true
+```
 
-Same core → different feel.
+Laptop:
+
+```gdscript
+const ENET_HOST := false
+const ENET_IP := "YOUR_DESKTOP_IP"
+```
+
+Run desktop first.
+Run laptop second.
+
+Once both connect:
+
+* press Enter on host
+* synchronized rollback session begins
+
+Current debug HUD tracks:
+
+* packets received
+* last remote frame
+* rollback count
+* max rollback depth
+* prediction misses
 
 ---
 
-## Key Properties
+# 🧠 What This Is
 
-- Deterministic simulation (fixed timestep, 60 Hz)  
-- Frame-based logic (no delta-time drift)  
-- Rollback-ready architecture  
-- Input buffered per frame  
-- Simulation separated from rendering  
+This project provides a deterministic simulation core for real-time games.
+
+It is designed to:
+
+* guarantee identical outcomes across machines
+* support rollback-based multiplayer
+* remain transport-agnostic
+* scale into different game genres
+
+The included combat demo is a reference implementation.
 
 ---
 
-## Architecture
+# 🔄 What is Rollback?
 
-The project is structured around a deterministic simulation core.
+Most multiplayer games:
 
-- `ArenaScene` coordinates the demo  
-- `FighterRollbackAdapter` handles frame input, buffering, snapshot, and restore  
-- `PlayerState` stores authoritative gameplay state  
-- `CombatSystem` resolves interactions deterministically  
-- Rendering reads from simulation state but does not author gameplay  
+* delay your actions
+* wait for the network
+* feel sluggish under latency
+
+Rollback works differently.
+
+The game:
+
+1. responds immediately
+2. predicts missing remote input
+3. receives delayed truth later
+4. rewinds old frames
+5. re-simulates forward
+6. corrects reality
+
+Result:
+
+* instant responsiveness
+* frame-accurate gameplay
+* smoother online feel
+
+---
+
+# 🧪 Current Rollback Prototype
+
+Current rollback flow:
+
+```text
+Input
+↓
+RollbackNetworkSession
+↓
+Prediction
+↓
+Snapshot History
+↓
+Late Packet Arrival
+↓
+Rollback + Replay
+↓
+Corrected Present
+```
+
+The rollback layer is intentionally separated from networking transport.
+
+Current transport:
+
+* ENet
+
+Planned transports:
+
+* WebRTC
+* relay servers
+* replay systems
+* custom transports
+
+without modifying gameplay simulation logic.
+
+---
+
+# ⚙️ Current Architecture
 
 ```text
                           ┌───────────────────────┐
@@ -139,13 +206,13 @@ The project is structured around a deterministic simulation core.
               │                       │                       │
               ▼                       ▼                       ▼
    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-   │ FighterRollback  │    │   PlayerState    │    │   PlayerState    │
-   │     Adapter      │───▶│    (Player 1)    │    │    (Player 2)    │
+   │ RollbackNetwork  │    │   PlayerState    │    │   PlayerState    │
+   │     Session      │───▶│    (Player 1)    │    │    (Player 2)    │
    │                  │    │ authoritative     │    │ authoritative     │
    │ - input buffer   │    │ gameplay state    │    │ gameplay state    │
-   │ - frame input    │    └──────────────────┘    └──────────────────┘
-   │ - snapshot       │              │                       │
-   │ - restore        │              └───────────┬───────────┘
+   │ - prediction     │    └──────────────────┘    └──────────────────┘
+   │ - rollback       │              │                       │
+   │ - replay         │              └───────────┬───────────┘
    └────────┬─────────┘                          │
             │                                    ▼
             │                         ┌──────────────────┐
@@ -161,182 +228,247 @@ The project is structured around a deterministic simulation core.
                                       │   read-only      │
                                       │ visual output    │
                                       └──────────────────┘
-````
+```
 
 ---
 
-## Rollback Model
+# 🛰️ Current Networking Architecture
 
-Each frame:
+```text
+Desktop Host
+↓
+ENetTransport
+↓
+Frame-indexed input packets
+↓
+RollbackNetworkSession
+↓
+Prediction + Snapshot History
+↓
+Rollback Replay
+↓
+Client
+```
 
-1. Input is buffered
-2. Simulation advances
-3. State is saved
-4. On mismatch → rollback + re-simulate
+Current status:
 
-Result:
-→ identical final state across runs
+* LAN rollback sessions working
+* synchronized match start working
+* rollback replay active
+* bounded rollback correction observed
+* live packet metrics available
+
+In progress:
+
+* checksum/desync validation
+* artificial latency + jitter testing
+* input-delay tuning
+* transport refinement
 
 ---
 
-## Debug / Validation
+# 🧪 Current Validation
 
-Includes:
+Current validation includes:
 
-* tick-level inspection
-* input tracking
-* state verification
+* rollback replay convergence
+* synchronized two-PC ENet sessions
+* bounded rollback correction on LAN
+* frame-indexed remote input replay
+
+Observed:
+
+* rollback corrections occurring successfully
+* low rollback depth during LAN tests
+* stable packet flow between clients
+
+Current focus:
+
+* 100ms / 150ms / 200ms stress testing
+* checksum validation
+* jitter handling
+* tuning online responsiveness
 
 ---
 
-## Status
+# 🎨 Art / Visual Workflow
 
-### Implemented
+The project intentionally supports rapid visual iteration.
+
+You can replace the art immediately.
+
+Go to:
+
+```text
+games/rollback_fighter/characters/example_fighter/sprites/
+```
+
+Replace PNGs with:
+
+* your drawings
+* pixel art
+* AI-generated art
+* placeholder images
+
+Run the project again.
+
+The rollback systems remain unchanged.
+
+---
+
+# ⚔️ Current Gameplay Systems
+
+Implemented:
+
+* movement
+* attacks
+* hit reactions
+* block
+* dodge
+* hitstop
+* cooldowns
+* rollback replay
+* synchronized multiplayer session start
+
+---
+
+# 🧠 Determinism Model
+
+The engine uses:
+
+* fixed timestep simulation
+* frame-based state updates
+* deterministic update ordering
+* explicit gameplay state
+
+Rendering is NOT authoritative.
+
+Gameplay simulation drives rendering.
+
+---
+
+# 🧪 Debug / Validation Tools
+
+Current tools:
+
+* rollback metrics HUD
+* packet counters
+* remote frame tracking
+* prediction miss tracking
+* rollback depth tracking
+* replay validation
+
+Future:
+
+* checksum comparison
+* replay export
+* deterministic replay validation
+* desync inspection tooling
+
+---
+
+# 📌 Current Status
+
+## Implemented
 
 * deterministic simulation core
-* local 2-player combat demo
-* snapshot + restore
+* rollback replay loop
+* synchronized two-PC ENet prototype
+* frame-indexed prediction
+* rollback correction metrics
+* rollback-safe combat demo
+* color art integration
 
-### In Progress
+## In Progress
 
-* online multiplayer (network transport)
+* higher latency benchmarking
+* checksum validation
+* transport abstraction refinement
+* rollback feel tuning
+
+## Planned
+
 * additional game demos
-
-### Planned / Experimental
-
-* AI-assisted tooling (Gemini integration)
-* additional rollback-based projects
+* AI-assisted tooling
+* replay systems
+* expanded rollback framework
 
 ---
 
-## Use Cases
+# 🎮 Potential Use Cases
 
 This is not limited to fighting games.
 
-Potential uses:
+Potential applications:
 
 * fighting / action games
 * RTS / tactics systems
 * co-op physics games
-* interactive systems
+* simulation sandboxes
+* educational systems
+* experimental multiplayer projects
 
 ---
 
-## Quick Start
+# ❓ FAQ
 
-```bash
-git clone https://github.com/caalifonzo711/hyperreality-engine.git
-```
+## Is this multiplayer?
 
-Open in Godot and run:
+Yes.
 
-```
-FighterArena.tscn
-```
+The current prototype supports:
 
----
+* synchronized two-PC rollback sessions
+* prediction + replay
+* rollback correction
+* ENet-based LAN testing
 
-## Run (Quick)
-
-1. Open in Godot 4.x
-2. Press F6 on `FighterArena.tscn`
+The networking layer is still experimental.
 
 ---
 
-## FAQ
+## Is rollback actually implemented?
 
-**Is this multiplayer?**
-Not yet — currently focused on deterministic correctness.
+Yes.
 
-**Do I need to code to use it?**
-No — you can swap art and experiment immediately.
+Current rollback systems include:
 
-**Is this just a fighting game?**
-No — the combat demo is a reference for a reusable system.
-
----
-
-## 🧠 Common Questions (Especially from OSS / Linux folks)
-
-### Is this actually deterministic across machines?
-
-Yes — the simulation is designed around:
-
-* fixed timestep (60 Hz)
-* frame-based state updates
-* explicit state (no hidden engine-side mutation)
-
-Current validation:
-
-* rollback loopback produces identical final states
-* snapshot + restore includes all gameplay-relevant variables
-
-Cross-machine validation is the next step.
-
----
-
-### Is rollback fully implemented or just “planned”?
-
-The core rollback pieces are implemented:
-
-* snapshot
+* snapshot capture
 * restore
-* deterministic simulation
-
-What’s missing:
-
-* real network transport (e.g. WebRTC / sockets)
-
-→ rollback-ready, not fully networked yet
+* replay
+* prediction correction
+* rollback metrics
 
 ---
 
-### Why use this instead of built-in engine networking?
+## Is this production-ready?
 
-Most engine networking assumes:
+Not yet.
 
-* latency compensation
-* interpolation
-* server authority
+Current state:
 
-This project explores:
-→ deterministic simulation + rollback
-
-Which enables:
-
-* instant responsiveness
-* frame-accurate gameplay
-* consistent results across clients
+* functioning prototype
+* rollback architecture validation
+* deterministic networking experiments
 
 ---
 
-### Why Godot?
+## Why Godot?
 
 * open source
 * lightweight
 * fast iteration
-* no engine-level constraints on simulation design
+* portable simulation architecture
+* transparent engine behavior
 
 Goal:
-→ keep the simulation model portable and understandable
+
+* understandable deterministic systems
+* transport-independent rollback architecture
 
 ---
 
-### What exactly gets snapshotted?
-
-All gameplay-relevant state:
-
-* position / velocity
-* attack state + timers
-* hit confirmation flags
-* cooldowns
-* hitstop
-
-Rendering is NOT included.
-
----
-
-### Is floating point determinism an issue?
+## Is floating point determinism a concern?
 
 Potentially, yes.
 
@@ -344,63 +476,58 @@ Current approach:
 
 * controlled math usage
 * deterministic update ordering
+* bounded simulation scope
 
-Future:
+Future options:
 
-* stricter constraints or fixed-point if needed
-
----
-
-### Can I use this in my own project?
-
-Yes — that’s the goal.
-
-Currently:
-
-* best used as a reference / starting point
+* stricter constraints
+* fixed-point arithmetic if needed
 
 ---
 
-### Is this production-ready?
-
-Not yet.
-
-→ working foundation + reference implementation
-
----
-
-## Collaboration
+# 🤝 Collaboration
 
 If you're:
 
-* building a game
-* experimenting with rollback
+* building rollback systems
+* experimenting with deterministic networking
+* exploring multiplayer architecture
 * or just curious
 
 Open an issue or share feedback.
 
 ---
 
-## Philosophy
+# Philosophy
 
-> Build small, deterministic systems that scale into anything.
+> Build small deterministic systems that scale into anything.
 
-This is:
+Current priorities:
 
-* a working demo
-* a foundation for future games
-* an indie experiment
+* deterministic simulation
+* rollback correctness
+* transport-independent architecture
+* understandable systems
+* rapid iteration
 
-Have fun.
+Small systems first.
+Then synchronization.
+Then scale.
 
 ---
 
-## License
+# License
 
 MIT
 
 ---
 
 built by Alonso Rojas
-linkedin: [https://www.linkedin.com/in/alonso-rojas-617546126/](https://www.linkedin.com/in/alonso-rojas-617546126/)
+
+LinkedIn:
+[https://www.linkedin.com/in/alonso-rojas-617546126/](https://www.linkedin.com/in/alonso-rojas-617546126/)
+
+```
+```
+
 
