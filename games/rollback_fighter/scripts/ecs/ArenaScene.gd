@@ -32,6 +32,7 @@ const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 # 12 = ~200ms
 const BENCHMARK_DELAY_FRAMES := 12
 const BENCHMARK_JITTER_FRAMES := 0
+const BENCHMARK_INPUT_DELAY_FRAMES := 3 #for tuning test 3, 4, 6
 
 @onready var player_state := PlayerState.new()
 @onready var opponent_state := PlayerState.new()
@@ -46,6 +47,7 @@ const BENCHMARK_JITTER_FRAMES := 0
 const LatencyHarnessTransportScene = preload("res://games/rollback_fighter/scripts/net/LatencyHarnessTransport.gd")
 const RollbackNetworkSessionScene = preload("res://games/rollback_fighter/scripts/net/RollbackNetworkSession.gd")
 const ENetTransportScene = preload("res://games/rollback_fighter/scripts/net/ENetTransport.gd")
+
 
 var rollback_session: Node = null
 var transport: Node = null
@@ -118,7 +120,8 @@ func _ready() -> void:
 	rollback_session = RollbackNetworkSessionScene.new()
 	add_child(rollback_session)
 	rollback_session.setup(adapter, transport, local_player_id)
-
+	rollback_session.input_delay_frames = BENCHMARK_INPUT_DELAY_FRAMES
+	
 	if hud:
 		hud.set("p1_state", player_state)
 		hud.set("p2_state", opponent_state)
@@ -292,6 +295,7 @@ func _print_benchmark_results() -> void:
 	print("MaxRollbackDepth: %d" % int(rollback_session.max_rollback_depth))
 	print("PredictionMisses: %d" % int(rollback_session.prediction_misses))
 	print("ChecksumMismatch: NOT_IMPLEMENTED")
+	print("InputDelayFrames: %d" % BENCHMARK_INPUT_DELAY_FRAMES)
 	print("===============================================")
 	print("")
 

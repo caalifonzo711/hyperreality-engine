@@ -5,23 +5,15 @@ const PHYS_DT := 1.0 / 60.0
 const MAX_ROLLBACK_FRAMES := 60
 
 var player_id: int = 1
+var input_delay_frames: int = 0
 
-# -----------------------------
-# Core timeline state
-# -----------------------------
 var current_frame: int = 0
 
-# frame -> input
 var local_inputs: Dictionary = {}
 var remote_inputs: Dictionary = {}
 var predicted_remote_inputs: Dictionary = {}
-
-# frame -> snapshot
 var snapshots: Dictionary = {}
 
-# -----------------------------
-# Metrics
-# -----------------------------
 var rollback_count: int = 0
 var max_rollback_depth: int = 0
 var prediction_misses: int = 0
@@ -29,15 +21,9 @@ var packets_received: int = 0
 var last_remote_frame: int = -1
 var match_started: bool = false
 
-# -----------------------------
-# Dependencies
-# -----------------------------
 var adapter: FighterRollbackAdapter = null
 var transport: Node = null
 
-# -----------------------------
-# Prediction cache
-# -----------------------------
 var _last_remote_input: Dictionary = {
 	"mx": 0.0,
 	"lean_l": false,
@@ -61,7 +47,6 @@ func setup(_adapter: FighterRollbackAdapter, _transport: Node, _player_id: int =
 
 func reset_session() -> void:
 	current_frame = 0
-
 	local_inputs.clear()
 	remote_inputs.clear()
 	predicted_remote_inputs.clear()
@@ -73,16 +58,7 @@ func reset_session() -> void:
 	packets_received = 0
 	last_remote_frame = -1
 
-	_last_remote_input = {
-		"mx": 0.0,
-		"lean_l": false,
-		"lean_r": false,
-		"atk_l": false,
-		"atk_h": false,
-		"block": false,
-		"dodge": false,
-	}
-
+	_last_remote_input = _empty_input()
 	match_started = false
 
 
@@ -96,6 +72,18 @@ func frame_gap() -> int:
 		return 0
 
 	return current_frame - last_remote_frame
+
+
+func _empty_input() -> Dictionary:
+	return {
+		"mx": 0.0,
+		"lean_l": false,
+		"lean_r": false,
+		"atk_l": false,
+		"atk_h": false,
+		"block": false,
+		"dodge": false,
+	}
 
 
 func _simulate_frame(local_input: Dictionary, remote_input: Dictionary) -> void:
@@ -118,15 +106,18 @@ func tick(local_input: Dictionary) -> void:
 	if transport and transport.has_method("tick"):
 		transport.tick()
 
-	local_inputs[current_frame] = local_input.duplicate(true)
+	var input_frame: int = current_frame + max(0, input_delay_frames)
+	local_inputs[input_frame] = local_input.duplicate(true)
 
 	if transport and transport.has_method("send_packet"):
 		transport.send_packet({
 			"type": "input",
-			"frame": current_frame,
+			"frame": input_frame,
 			"player_id": player_id,
 			"input": local_input.duplicate(true)
 		})
+
+	var delayed_local_input: Dictionary = local_inputs.get(current_frame, _empty_input())
 
 	var remote_input: Dictionary = {}
 
@@ -152,7 +143,7 @@ func tick(local_input: Dictionary) -> void:
 	if predicted_remote_inputs.has(old_frame):
 		predicted_remote_inputs.erase(old_frame)
 
-	_simulate_frame(local_input, remote_input)
+	_simulate_frame(delayed_local_input, remote_input)
 
 	current_frame += 1
 
@@ -167,7 +158,6 @@ func _on_packet_received(packet: Dictionary) -> void:
 	if packet.get("type", "") != "input":
 		return
 
-	# Ignore our own packets.
 	if int(packet.get("player_id", -1)) == player_id:
 		return
 
@@ -182,7 +172,6 @@ func _on_packet_received(packet: Dictionary) -> void:
 
 	remote_inputs[frame] = input_data.duplicate(true)
 
-	# Future/current packets do not require rollback yet.
 	if frame >= current_frame:
 		return
 
@@ -212,7 +201,7 @@ func _rollback_and_replay(from_frame: int) -> void:
 	var replay_frame: int = from_frame
 
 	while replay_frame < original_current_frame:
-		var local_input: Dictionary = local_inputs.get(replay_frame, {})
+		var local_input: Dictionary = local_inputs.get(replay_frame, _empty_input())
 		var remote_input: Dictionary = {}
 
 		if remote_inputs.has(replay_frame):
