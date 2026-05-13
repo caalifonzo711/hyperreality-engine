@@ -66,6 +66,8 @@ func _ready() -> void:
 
 	if USE_ENET:
 		transport = ENetTransportScene.new()
+		transport.artificial_delay_frames = 0
+		transport.artificial_jitter_frames = 0
 		add_child(transport)
 
 		if ENET_HOST:
