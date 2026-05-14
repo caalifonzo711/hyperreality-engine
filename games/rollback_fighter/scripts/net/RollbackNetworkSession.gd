@@ -24,6 +24,16 @@ var match_started: bool = false
 var adapter: FighterRollbackAdapter = null
 var transport: Node = null
 
+# -----------------------------
+# Checksum state
+# -----------------------------
+var local_checksum: int = 0
+var remote_checksum: int = 0
+var checksum_mismatch: bool = false
+
+# -----------------------------
+# Prediction cache
+# -----------------------------
 var _last_remote_input: Dictionary = {
 	"mx": 0.0,
 	"lean_l": false,
@@ -47,6 +57,7 @@ func setup(_adapter: FighterRollbackAdapter, _transport: Node, _player_id: int =
 
 func reset_session() -> void:
 	current_frame = 0
+
 	local_inputs.clear()
 	remote_inputs.clear()
 	predicted_remote_inputs.clear()
@@ -57,6 +68,10 @@ func reset_session() -> void:
 	prediction_misses = 0
 	packets_received = 0
 	last_remote_frame = -1
+
+	local_checksum = 0
+	remote_checksum = 0
+	checksum_mismatch = false
 
 	_last_remote_input = _empty_input()
 	match_started = false
@@ -86,6 +101,18 @@ func _empty_input() -> Dictionary:
 	}
 
 
+func _compute_checksum() -> int:
+	if adapter == null:
+		return 0
+
+	if not adapter.has_method("capture"):
+		return 0
+
+	var snapshot: Dictionary = adapter.capture()
+
+	return snapshot.hash()
+
+
 func _simulate_frame(local_input: Dictionary, remote_input: Dictionary) -> void:
 	if adapter == null:
 		return
@@ -107,8 +134,12 @@ func tick(local_input: Dictionary) -> void:
 		transport.tick()
 
 	var input_frame: int = current_frame + max(0, input_delay_frames)
+
 	local_inputs[input_frame] = local_input.duplicate(true)
 
+	# -----------------------------
+	# Send input packet
+	# -----------------------------
 	if transport and transport.has_method("send_packet"):
 		transport.send_packet({
 			"type": "input",
@@ -145,19 +176,56 @@ func tick(local_input: Dictionary) -> void:
 
 	_simulate_frame(delayed_local_input, remote_input)
 
+	# -----------------------------
+	# Compute checksum AFTER simulation
+	# -----------------------------
+	local_checksum = _compute_checksum()
+
+	# -----------------------------
+	# Send checksum packet
+	# -----------------------------
+	if transport and transport.has_method("send_packet"):
+		transport.send_packet({
+			"type": "checksum",
+			"frame": current_frame,
+			"player_id": player_id,
+			"checksum": local_checksum
+		})
+
 	current_frame += 1
 
 
 func _predict_remote_input(frame: int) -> Dictionary:
 	var predicted: Dictionary = _last_remote_input.duplicate(true)
+
 	predicted_remote_inputs[frame] = predicted
+
 	return predicted
 
 
+func _handle_checksum_packet(packet: Dictionary) -> void:
+	remote_checksum = int(packet.get("checksum", 0))
+
+	checksum_mismatch = (remote_checksum != local_checksum)
+
+
 func _on_packet_received(packet: Dictionary) -> void:
-	if packet.get("type", "") != "input":
+	var packet_type: String = packet.get("type", "")
+
+	# -----------------------------
+	# Checksum packet
+	# -----------------------------
+	if packet_type == "checksum":
+		_handle_checksum_packet(packet)
 		return
 
+	# -----------------------------
+	# Ignore non-input packets
+	# -----------------------------
+	if packet_type != "input":
+		return
+
+	# Ignore echoed local packets
 	if int(packet.get("player_id", -1)) == player_id:
 		return
 
@@ -172,6 +240,7 @@ func _on_packet_received(packet: Dictionary) -> void:
 
 	remote_inputs[frame] = input_data.duplicate(true)
 
+	# Future/current packet = no rollback needed
 	if frame >= current_frame:
 		return
 
@@ -202,6 +271,7 @@ func _rollback_and_replay(from_frame: int) -> void:
 
 	while replay_frame < original_current_frame:
 		var local_input: Dictionary = local_inputs.get(replay_frame, _empty_input())
+
 		var remote_input: Dictionary = {}
 
 		if remote_inputs.has(replay_frame):
@@ -211,6 +281,7 @@ func _rollback_and_replay(from_frame: int) -> void:
 			remote_input = _predict_remote_input(replay_frame)
 
 		snapshots[replay_frame] = adapter.capture()
+
 		_simulate_frame(local_input, remote_input)
 
 		replay_frame += 1

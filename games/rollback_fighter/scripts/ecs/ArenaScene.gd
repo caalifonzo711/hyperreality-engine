@@ -31,7 +31,7 @@ const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 # 9  = ~150ms
 # 12 = ~200ms
 const BENCHMARK_DELAY_FRAMES := 12
-const BENCHMARK_JITTER_FRAMES := 0
+const BENCHMARK_JITTER_FRAMES := 1
 const BENCHMARK_INPUT_DELAY_FRAMES := 3 #for tuning test 3, 4, 6
 
 @onready var player_state := PlayerState.new()
@@ -56,6 +56,7 @@ var local_player_id: int = 1
 var benchmark_running: bool = false
 var benchmark_complete: bool = false
 var benchmark_start_frame: int = 0
+
 
 @onready var cam: Camera2D = get_node_or_null("Camera2D")
 @onready var p1_placeholder: Node2D = get_node_or_null("PlayerPlaceholder")
