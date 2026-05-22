@@ -1,65 +1,192 @@
-# Hyperreality Rollback Engine
+# SyncStrike — Gemini Rollback Fighter
 
-A deterministic, rollback-ready simulation framework built in Godot.
+## Google I/O Build With AI Hackathon Edition
 
-> Minimal core. Deterministic by design. Rollback from first principles.
+Built on top of the Hyperreality Rollback Engine. 
 
-Now featuring:
-- synchronized two-PC rollback prototype over ENet
-- frame-indexed input prediction + replay
-- rollback correction metrics
-- hand-drawn animated combat demo with updated color art
+A rollback-synchronized multiplayer fighting game where Gemini generates deterministic-compatible move data in real time.
 
-<img width="426" height="240" alt="Video Project 3" src="https://github.com/user-attachments/assets/556343c1-8d41-4d70-9477-9be47c21a5bc" />
-
-
-
-⚠️ NOTE:
-AI / Gemini tooling is still experimental.
-
-The rollback fighter demo is currently the primary working showcase.
+This project explores how LLM-generated content can safely integrate into rollback multiplayer systems without breaking synchronization.
 
 ---
 
-# 🎮 Current Demo — Rollback Fighter Prototype
+# 🚀 What Makes This Different
 
-The project now includes a working two-computer rollback prototype.
+Most AI projects are:
 
-Current features:
-- synchronized two-PC rollback sessions
-- frame-indexed input packets
-- prediction + replay
-- rollback metrics HUD
-- synchronized match start
-- rollback-safe combat state
-- updated hand-drawn color character art
-- deterministic combat simulation
+* asynchronous
+* chat-based
+* productivity-focused
+* disconnected from real-time systems
 
-The original prototype used programmer placeholder drawings.
+This project demonstrates:
 
-The current version now includes:
-- colored character sprites
-- stage art integration
-- animated fighter placeholders
-- early indie game presentation polish
+```text
+Prompt
+↓
+Gemini
+↓
+Structured Move JSON
+↓
+Rollback Fighter
+↓
+Deterministic Multiplayer Execution
+```
 
-Still intentionally lightweight while networking systems are stabilized.
+The generated move data is loaded directly into a rollback-safe combat state machine.
 
 ---
 
-# 🚀 Quick Start
+# 🎮 Current Demo
 
-## Clone
+The current hackathon demo supports:
+
+✅ Gemini-generated move configs
+✅ rollback multiplayer architecture
+✅ deterministic combat simulation
+✅ live JSON generation + saving
+✅ generated move injection into gameplay
+✅ synchronized rollback fighter prototype
+
+---
+
+# ⚠️ IMPORTANT
+
+This is an experimental hackathon prototype.
+
+The current goal is:
+
+> demonstrating AI-assisted deterministic gameplay systems.
+
+NOT:
+
+* autonomous AI gameplay
+* procedural game generation
+* replacing simulation authority with LLMs
+
+Gemini only generates structured move configuration data.
+
+Rollback simulation remains authoritative.
+
+---
+
+# 🧠 Core Concept
+
+Most multiplayer games delay player actions to wait for the network.
+
+Rollback works differently:
+
+```text
+Input
+↓
+Immediate Local Response
+↓
+Predict Missing Remote Input
+↓
+Receive Delayed Truth
+↓
+Rollback Old Frames
+↓
+Replay Forward
+↓
+Correct Reality
+```
+
+Result:
+
+* responsive multiplayer gameplay
+* low-latency feel
+* synchronized simulation
+
+---
+
+# 🤖 Gemini Integration
+
+Gemini is used as a:
+
+> constrained gameplay configuration generator.
+
+Example prompt:
+
+```text
+make a strong kick with:
+startup 8
+active 4
+recovery 15
+```
+
+Gemini generates:
+
+```json
+{
+  "name": "strong kick",
+  "startup": 8,
+  "active": 4,
+  "recovery": 15,
+  "on_hit": 2,
+  "on_block": -4
+}
+```
+
+The move is then:
+
+* saved to JSON
+* loaded into the rollback fighter
+* injected into the heavy attack timing system
+
+---
+
+# ⚙️ REQUIREMENTS
+
+## Godot
+
+Godot 4.x
+
+## Gemini API Key
+
+You need a Gemini API key from:
+
+[Google AI Studio API Keys](https://aistudio.google.com/app/apikey?utm_source=chatgpt.com)
+
+---
+
+# 🔑 API KEY SETUP
+
+## Windows PowerShell
+
+Run:
+
+```powershell
+setx GEMINI_API_KEY "YOUR_API_KEY_HERE"
+```
+
+IMPORTANT:
+After running this:
+
+* close Godot completely
+* reopen Godot
+
+The project loads the key from:
+
+```gdscript
+OS.get_environment("GEMINI_API_KEY")
+```
+
+---
+
+# ▶️ HOW TO RUN
+
+## 1. Clone Repo
 
 ```bash
 git clone https://github.com/caalifonzo711/hyperreality-engine.git
-````
+```
 
-Open in Godot 4.x.
+Open in Godot 4.x. 
 
 ---
 
-# ▶️ Run Local Demo
+# ▶️ Main Fighter Scene
 
 Open:
 
@@ -67,98 +194,150 @@ Open:
 FighterArena.tscn
 ```
 
-Press:
+Run:
 
 ```text
 F6
 ```
 
-You can immediately:
-
-* move
-* attack
-* block
-* dodge
-* test rollback-safe combat interactions
-
 ---
 
-# 🌐 Run Two-PC Rollback Test
+# 🧪 Gemini Panel
 
-Desktop:
+The Gemini UI panel is:
 
-```gdscript
-const ENET_HOST := true
+```text
+addons/gemini_integration/tools/GeminiConfigGeneratorPanel.tscn
 ```
 
-Laptop:
+The panel should already exist inside the fighter scene for hackathon demos.
 
-```gdscript
-const ENET_HOST := false
-const ENET_IP := "YOUR_DESKTOP_IP"
+---
+
+# 🎮 CONTROLS
+
+Check:
+
+```text
+Project Settings → Input Map
 ```
 
-Run desktop first.
-Run laptop second.
+Current important actions:
 
-Once both connect:
+```text
+atk_l = light attack
+atk_h = heavy attack
+```
 
-* press Enter on host
-* synchronized rollback session begins
-
-Current debug HUD tracks:
-
-* packets received
-* last remote frame
-* rollback count
-* max rollback depth
-* prediction misses
+Heavy attack is currently overridden by Gemini-generated move data.
 
 ---
 
-# 🧠 What This Is
+# 🧠 HOW TO USE THE GEMINI DEMO
 
-This project provides a deterministic simulation core for real-time games.
+## Step 1 — Enter Prompt
 
-It is designed to:
+Type something like:
 
-* guarantee identical outcomes across machines
-* support rollback-based multiplayer
-* remain transport-agnostic
-* scale into different game genres
+```text
+make a super fast heavy kick
+startup 1
+active 10
+recovery 5
+```
 
-The included combat demo is a reference implementation.
+OR:
 
----
-
-# 🔄 What is Rollback?
-
-Most multiplayer games:
-
-* delay your actions
-* wait for the network
-* feel sluggish under latency
-
-Rollback works differently.
-
-The game:
-
-1. responds immediately
-2. predicts missing remote input
-3. receives delayed truth later
-4. rewinds old frames
-5. re-simulates forward
-6. corrects reality
-
-Result:
-
-* instant responsiveness
-* frame-accurate gameplay
-* smoother online feel
+```text
+make a ridiculously slow heavy attack
+startup 60
+active 20
+recovery 60
+```
 
 ---
 
-# 🧪 Current Rollback Prototype
+# Step 2 — Click Generate
+
+The LEFT button:
+
+```text
+Generate
+```
+
+calls Gemini.
+
+Gemini returns structured move JSON.
+
+---
+
+# Step 3 — Click Save
+
+The RIGHT button:
+
+```text
+Save
+```
+
+does ALL of the following:
+
+✅ saves JSON to:
+
+```text
+games/rollback_fighter/moves/
+```
+
+✅ reloads move data
+
+✅ injects generated move into live PlayerState nodes
+
+✅ updates heavy attack timing live
+
+---
+
+# ✅ SUCCESS CONDITION
+
+If successful, console should print:
+
+```text
+[GeminiPanel] Applied generated move to 2 PlayerState node(s)
+```
+
+That means:
+
+* Gemini generated valid move data
+* JSON saved successfully
+* move injected into gameplay
+
+---
+
+# 🎮 TESTING THE GENERATED MOVE
+
+Press:
+
+```text
+atk_h
+```
+
+to trigger the Gemini-generated heavy attack.
+
+## Example
+
+If startup = 60:
+
+* heavy attack becomes VERY slow
+
+If startup = 1:
+
+* heavy attack becomes nearly instant
+
+This confirms:
+
+> Gemini-generated move timing is controlling live gameplay.
+
+---
+
+# 🔄 Rollback Architecture
 
 Current rollback flow:
 
@@ -178,193 +357,89 @@ Rollback + Replay
 Corrected Present
 ```
 
-The rollback layer is intentionally separated from networking transport.
+The rollback layer is intentionally separated from:
 
-Current transport:
+* Gemini
+* networking transport
+* rendering
 
-* ENet
-
-Planned transports:
-
-* WebRTC
-* relay servers
-* replay systems
-* custom transports
-
-without modifying gameplay simulation logic.
+This preserves deterministic simulation integrity. 
 
 ---
 
-# ⚙️ Current Architecture
+# 🧠 Current Architecture
 
 ```text
-                          ┌───────────────────────┐
-                          │    FighterArena.tscn  │
-                          │   (top-level scene)   │
-                          └───────────┬───────────┘
-                                      │
-              ┌───────────────────────┼───────────────────────┐
-              │                       │                       │
-              ▼                       ▼                       ▼
-   ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-   │ RollbackNetwork  │    │   PlayerState    │    │   PlayerState    │
-   │     Session      │───▶│    (Player 1)    │    │    (Player 2)    │
-   │                  │    │ authoritative     │    │ authoritative     │
-   │ - input buffer   │    │ gameplay state    │    │ gameplay state    │
-   │ - prediction     │    └──────────────────┘    └──────────────────┘
-   │ - rollback       │              │                       │
-   │ - replay         │              └───────────┬───────────┘
-   └────────┬─────────┘                          │
-            │                                    ▼
-            │                         ┌──────────────────┐
-            └────────────────────────▶│   CombatSystem   │
-                                      │ deterministic    │
-                                      │ interaction      │
-                                      │ resolution       │
-                                      └────────┬─────────┘
-                                               │
-                                               ▼
-                                      ┌──────────────────┐
-                                      │    Rendering     │
-                                      │   read-only      │
-                                      │ visual output    │
-                                      └──────────────────┘
+Gemini Prompt
+↓
+GeminiClient
+↓
+Gemini JSON
+↓
+ConfigFactory
+↓
+Move JSON
+↓
+PlayerState
+↓
+Rollback Simulation
+↓
+CombatSystem
+↓
+Rendering
 ```
 
 ---
 
-# 🛰️ Current Networking Architecture
+# 🎯 Hackathon Goal
+
+Demonstrate:
+
+> AI-assisted deterministic multiplayer gameplay systems.
+
+The key technical challenge:
+
+* constraining AI outputs
+* preserving rollback synchronization
+* maintaining deterministic replay safety
+
+---
+
+# 🧪 Recommended Demo Flow
+
+## Demo 1 — Fast Move
+
+Generate:
 
 ```text
-Desktop Host
-↓
-ENetTransport
-↓
-Frame-indexed input packets
-↓
-RollbackNetworkSession
-↓
-Prediction + Snapshot History
-↓
-Rollback Replay
-↓
-Client
+startup 1
 ```
 
-Current status:
-
-* LAN rollback sessions working
-* synchronized match start working
-* rollback replay active
-* bounded rollback correction observed
-* live packet metrics available
-
-In progress:
-
-* checksum/desync validation
-* artificial latency + jitter testing
-* input-delay tuning
-* transport refinement
+Show instant heavy attack.
 
 ---
 
-# 🧪 Current Validation
+## Demo 2 — Slow Move
 
-Current validation includes:
-
-* rollback replay convergence
-* synchronized two-PC ENet sessions
-* bounded rollback correction on LAN
-* frame-indexed remote input replay
-
-Observed:
-
-* rollback corrections occurring successfully
-* low rollback depth during LAN tests
-* stable packet flow between clients
-
-Current focus:
-
-* 100ms / 150ms / 200ms stress testing
-* checksum validation
-* jitter handling
-* tuning online responsiveness
-
----
-
-# 🎨 Art / Visual Workflow
-
-The project intentionally supports rapid visual iteration.
-
-You can replace the art immediately.
-
-Go to:
+Generate:
 
 ```text
-games/rollback_fighter/characters/example_fighter/sprites/
+startup 60
 ```
 
-Replace PNGs with:
-
-* your drawings
-* pixel art
-* AI-generated art
-* placeholder images
-
-Run the project again.
-
-The rollback systems remain unchanged.
+Show extremely delayed heavy attack.
 
 ---
 
-# ⚔️ Current Gameplay Systems
+## Demo 3 — Multiplayer
 
-Implemented:
+Run rollback multiplayer session.
 
-* movement
-* attacks
-* hit reactions
-* block
-* dodge
-* hitstop
-* cooldowns
-* rollback replay
-* synchronized multiplayer session start
+Show:
 
----
-
-# 🧠 Determinism Model
-
-The engine uses:
-
-* fixed timestep simulation
-* frame-based state updates
-* deterministic update ordering
-* explicit gameplay state
-
-Rendering is NOT authoritative.
-
-Gameplay simulation drives rendering.
-
----
-
-# 🧪 Debug / Validation Tools
-
-Current tools:
-
-* rollback metrics HUD
-* packet counters
-* remote frame tracking
-* prediction miss tracking
-* rollback depth tracking
-* replay validation
-
-Future:
-
-* checksum comparison
-* replay export
-* deterministic replay validation
-* desync inspection tooling
+* generated move still synchronizes
+* rollback still functions
+* deterministic replay preserved
 
 ---
 
@@ -372,163 +447,45 @@ Future:
 
 ## Implemented
 
-* deterministic simulation core
-* rollback replay loop
-* synchronized two-PC ENet prototype
-* frame-indexed prediction
-* rollback correction metrics
-* rollback-safe combat demo
-* color art integration
+✅ rollback replay
+✅ deterministic simulation
+✅ synchronized multiplayer prototype
+✅ Gemini move generation
+✅ JSON save pipeline
+✅ live gameplay injection
+✅ rollback-safe combat prototype
+
+---
 
 ## In Progress
 
-* higher latency benchmarking
-* checksum validation
-* transport abstraction refinement
-* rollback feel tuning
-
-## Planned
-
-* additional game demos
-* AI-assisted tooling
-* replay systems
-* expanded rollback framework
+⚠️ higher latency testing
+⚠️ multiplayer polish
+⚠️ XR experiments
+⚠️ advanced move balancing tools
 
 ---
 
-# 🎮 Potential Use Cases
+# 🧠 Philosophy
 
-This is not limited to fighting games.
-
-Potential applications:
-
-* fighting / action games
-* RTS / tactics systems
-* co-op physics games
-* simulation sandboxes
-* educational systems
-* experimental multiplayer projects
-
----
-
-# ❓ FAQ
-
-## Is this multiplayer?
-
-Yes.
-
-The current prototype supports:
-
-* synchronized two-PC rollback sessions
-* prediction + replay
-* rollback correction
-* ENet-based LAN testing
-
-The networking layer is still experimental.
-
----
-
-## Is rollback actually implemented?
-
-Yes.
-
-Current rollback systems include:
-
-* snapshot capture
-* restore
-* replay
-* prediction correction
-* rollback metrics
-
----
-
-## Is this production-ready?
-
-Not yet.
-
-Current state:
-
-* functioning prototype
-* rollback architecture validation
-* deterministic networking experiments
-
----
-
-## Why Godot?
-
-* open source
-* lightweight
-* fast iteration
-* portable simulation architecture
-* transparent engine behavior
-
-Goal:
-
-* understandable deterministic systems
-* transport-independent rollback architecture
-
----
-
-## Is floating point determinism a concern?
-
-Potentially, yes.
-
-Current approach:
-
-* controlled math usage
-* deterministic update ordering
-* bounded simulation scope
-
-Future options:
-
-* stricter constraints
-* fixed-point arithmetic if needed
-
----
-
-# 🤝 Collaboration
-
-If you're:
-
-* building rollback systems
-* experimenting with deterministic networking
-* exploring multiplayer architecture
-* or just curious
-
-Open an issue or share feedback.
-
----
-
-# Philosophy
-
-> Build small deterministic systems that scale into anything.
+Small deterministic systems that scale into anything.
 
 Current priorities:
 
-* deterministic simulation
 * rollback correctness
+* deterministic simulation
 * transport-independent architecture
 * understandable systems
 * rapid iteration
 
-Small systems first.
-Then synchronization.
-Then scale.
-
 ---
 
-# License
+# Built By
 
-MIT
-
----
-
-built by Alonso Rojas
+Alonso Rojas
 
 LinkedIn:
-[https://www.linkedin.com/in/alonso-rojas-617546126/](https://www.linkedin.com/in/alonso-rojas-617546126/)
+[Alonso Rojas LinkedIn](https://www.linkedin.com/in/alonso-rojas-617546126/?utm_source=chatgpt.com)
 
-```
-```
 
 
