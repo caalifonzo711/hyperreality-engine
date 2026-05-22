@@ -1,121 +1,59 @@
-# SyncStrike — Gemini Rollback Fighter
+# SyncStrike QA Benchmark Demo — Gemini Rollback Fighter
 
-## Google I/O Build With AI Hackathon Edition
+A deterministic rollback multiplayer fighter with Gemini-generated move data and automated two-PC QA benchmarking.
 
-Built on top of the Hyperreality Rollback Engine. 
+## What This Demo Shows
 
-A rollback-synchronized multiplayer fighting game where Gemini generates deterministic-compatible move data in real time.
+This demo proves three things at once:
 
-This project explores how LLM-generated content can safely integrate into rollback multiplayer systems without breaking synchronization.
+1. **Rollback networking works across two computers**
+2. **Gemini can generate fighting-game move data**
+3. **The generated move becomes part of the deterministic rollback simulation**
 
----
-
-# 🚀 What Makes This Different
-
-Most AI projects are:
-
-* asynchronous
-* chat-based
-* productivity-focused
-* disconnected from real-time systems
-
-This project demonstrates:
+In other words:
 
 ```text
-Prompt
+Gemini prompt
 ↓
-Gemini
+Generated move JSON
 ↓
-Structured Move JSON
+Rollback fighter loads move
 ↓
-Rollback Fighter
+Two machines connect
 ↓
-Deterministic Multiplayer Execution
-```
+Press Enter
+↓
+Automated QA match runs
+↓
+Logs prove synchronization + generated move behavior
+````
 
-The generated move data is loaded directly into a rollback-safe combat state machine.
+This is not just an AI text demo. It is AI-generated gameplay data running inside a real-time deterministic multiplayer system.
 
 ---
 
-# 🎮 Current Demo
+# Why It Matters
 
-The current hackathon demo supports:
+Most AI demos are asynchronous: chatbots, dashboards, RAG apps, content tools.
 
-✅ Gemini-generated move configs
-✅ rollback multiplayer architecture
-✅ deterministic combat simulation
-✅ live JSON generation + saving
-✅ generated move injection into gameplay
-✅ synchronized rollback fighter prototype
+This project asks a harder question:
 
----
+> Can AI-generated content safely enter a real-time rollback multiplayer system without breaking determinism?
 
-# ⚠️ IMPORTANT
+Our answer:
 
-This is an experimental hackathon prototype.
+> Yes — if Gemini only generates structured data, while the rollback engine remains authoritative.
 
-The current goal is:
+Gemini does **not** control the simulation.
+Gemini generates rollback-safe move config data.
 
-> demonstrating AI-assisted deterministic gameplay systems.
-
-NOT:
-
-* autonomous AI gameplay
-* procedural game generation
-* replacing simulation authority with LLMs
-
-Gemini only generates structured move configuration data.
-
-Rollback simulation remains authoritative.
+The engine decides how to load, validate, simulate, rollback, and replay.
 
 ---
 
-# 🧠 Core Concept
+# Core Demo Concept
 
-Most multiplayer games delay player actions to wait for the network.
-
-Rollback works differently:
-
-```text
-Input
-↓
-Immediate Local Response
-↓
-Predict Missing Remote Input
-↓
-Receive Delayed Truth
-↓
-Rollback Old Frames
-↓
-Replay Forward
-↓
-Correct Reality
-```
-
-Result:
-
-* responsive multiplayer gameplay
-* low-latency feel
-* synchronized simulation
-
----
-
-# 🤖 Gemini Integration
-
-Gemini is used as a:
-
-> constrained gameplay configuration generator.
-
-Example prompt:
-
-```text
-make a strong kick with:
-startup 8
-active 4
-recovery 15
-```
-
-Gemini generates:
+Gemini generates a move like:
 
 ```json
 {
@@ -128,43 +66,36 @@ Gemini generates:
 }
 ```
 
-The move is then:
+That move is saved as JSON and injected into the fighter as the generated heavy attack.
 
-* saved to JSON
-* loaded into the rollback fighter
-* injected into the heavy attack timing system
+When the QA benchmark runs, the output logs show the generated move being loaded and used.
 
----
+Look for console lines like:
 
-# ⚙️ REQUIREMENTS
+```text
+[GeminiMove] Loaded generated heavy move
+[GeminiMove] Starting heavy
+```
 
-## Godot
-
-Godot 4.x
-
-## Gemini API Key
-
-You need a Gemini API key from:
-
-[Google AI Studio API Keys](https://aistudio.google.com/app/apikey?utm_source=chatgpt.com)
+That confirms the Gemini-generated strike entered the gameplay simulation.
 
 ---
 
-# 🔑 API KEY SETUP
+# API Key Setup
 
-## Windows PowerShell
+Create a Gemini API key from Google AI Studio.
 
-Run:
+On Windows PowerShell:
 
 ```powershell
 setx GEMINI_API_KEY "YOUR_API_KEY_HERE"
 ```
 
-IMPORTANT:
-After running this:
+Then restart:
 
-* close Godot completely
-* reopen Godot
+* Godot
+* terminal
+* editor
 
 The project loads the key from:
 
@@ -172,320 +103,234 @@ The project loads the key from:
 OS.get_environment("GEMINI_API_KEY")
 ```
 
----
-
-# ▶️ HOW TO RUN
-
-## 1. Clone Repo
-
-```bash
-git clone https://github.com/caalifonzo711/hyperreality-engine.git
-```
-
-Open in Godot 4.x. 
-
----
-
-# ▶️ Main Fighter Scene
-
-Open:
+If the key is detected, logs should show:
 
 ```text
-FighterArena.tscn
+GeminiClient: API key detected
 ```
 
-Run:
+---
+
+# Two-PC QA Benchmark Setup
+
+This demo is designed to run on two machines.
+
+Example:
+
+* Desktop = host
+* Laptop = client
+
+Both machines should have the project cloned and opened in Godot.
+
+---
+
+# Network Setup
+
+You can connect machines using:
+
+* same WiFi/LAN
+* Tailscale
+* other private VPN / direct IP setup
+
+## Recommended: Tailscale
+
+1. Install Tailscale on both machines.
+2. Log into the same Tailscale account/network.
+3. Confirm both machines can see each other.
+4. Copy the host machine’s Tailscale IP.
+5. Put that IP into the client config.
+
+Host:
+
+```gdscript
+const ENET_HOST := true
+```
+
+Client:
+
+```gdscript
+const ENET_HOST := false
+const ENET_IP := "HOST_TAILSCALE_OR_LAN_IP"
+```
+
+Run the host first.
+Run the client second.
+
+---
+
+# Running the QA Demo
+
+Once both machines connect:
 
 ```text
-F6
+Press Enter on the host
 ```
+
+The QA benchmark should begin automatically on both computers.
+
+The system will run a deterministic test match and print benchmark output.
 
 ---
 
-# 🧪 Gemini Panel
+# What To Look For In The Output
 
-The Gemini UI panel is:
+Important lines:
 
 ```text
-addons/gemini_integration/tools/GeminiConfigGeneratorPanel.tscn
+GeminiClient: API key detected
+GeminiClient: Using schema 'fighter_move'
+Gemini panel saved config to: res://games/rollback_fighter/moves/move_strong_kick.json
+[GeminiMove] Loaded generated heavy move
+[GeminiMove] Starting heavy
 ```
 
-The panel should already exist inside the fighter scene for hackathon demos.
+These prove:
+
+* Gemini connected
+* Gemini generated move data
+* JSON was saved
+* fighter loaded the move
+* generated move entered gameplay
 
 ---
 
-# 🎮 CONTROLS
+# Rollback QA Metrics
 
-Check:
+The benchmark output may include:
 
 ```text
-Project Settings → Input Map
+Packets
+LastRemoteFrame
+LocalFrame
+FrameGap
+RollbackCount
+MaxRollbackDepth
+PredictionMisses
+InputDelayFrames
 ```
 
-Current important actions:
+What these mean:
 
-```text
-atk_l = light attack
-atk_h = heavy attack
+## Packets
+
+Network messages received.
+
+## LocalFrame
+
+Current simulation frame on this machine.
+
+## LastRemoteFrame
+
+Latest frame received from the remote player.
+
+## FrameGap
+
+Difference between local and remote frame progress.
+
+## RollbackCount
+
+How many times the engine corrected prediction using late remote input.
+
+## MaxRollbackDepth
+
+Largest rollback window observed.
+
+## PredictionMisses
+
+How often predicted input differed from actual input.
+
+## InputDelayFrames
+
+Intentional input delay used to stabilize rollback feel.
+
+---
+
+# What Success Looks Like
+
+A successful run means:
+
+* both machines connect
+* pressing Enter starts the benchmark
+* simulation runs automatically
+* rollback metrics appear
+* generated Gemini move logs appear
+* both clients stay stable through the test
+
+The key result:
+
+> Gemini-generated move data successfully enters a deterministic rollback multiplayer simulation.
+
+---
+
+# Demo Script For Judges
+
+1. “This is a rollback multiplayer fighter running across two machines.”
+2. “Gemini generates structured move data, not gameplay logic.”
+3. “The move is saved as JSON and injected into the deterministic fighter state machine.”
+4. “Once both machines connect, we press Enter and the QA benchmark runs automatically.”
+5. “The logs show rollback metrics and the Gemini-generated move being used.”
+6. “The important point is that AI content enters the game without breaking rollback determinism.”
+
+---
+
+# Why This Is Not Just A Toy Demo
+
+The architecture separates AI from simulation authority.
+
+Gemini can generate:
+
+* move data
+* startup frames
+* active frames
+* recovery frames
+* balance values
+
+Gemini cannot directly modify:
+
+* rollback logic
+* network logic
+* physics
+* combat simulation authority
+* deterministic replay behavior
+
+That separation is what makes the system safe.
+
+---
+
+# Current Status
+
+Implemented:
+
+* rollback fighter prototype
+* two-PC QA benchmark
+* ENet multiplayer connection
+* Gemini API integration
+* move JSON generation
+* generated move saving
+* generated move injection
+* rollback metrics output
+
+In progress:
+
+* checksum validation
+* latency stress testing
+* cleaner UI
+* XR / glasses stretch experiments
+
+---
+
+# Hackathon Summary
+
+SyncStrike demonstrates AI-assisted deterministic multiplayer gameplay.
+
+The core idea:
+
+> Gemini creates the move.
+> The rollback engine proves it can run safely.
+
+```
 ```
 
-Heavy attack is currently overridden by Gemini-generated move data.
-
----
-
-# 🧠 HOW TO USE THE GEMINI DEMO
-
-## Step 1 — Enter Prompt
-
-Type something like:
-
-```text
-make a super fast heavy kick
-startup 1
-active 10
-recovery 5
-```
-
-OR:
-
-```text
-make a ridiculously slow heavy attack
-startup 60
-active 20
-recovery 60
-```
-
----
-
-# Step 2 — Click Generate
-
-The LEFT button:
-
-```text
-Generate
-```
-
-calls Gemini.
-
-Gemini returns structured move JSON.
-
----
-
-# Step 3 — Click Save
-
-The RIGHT button:
-
-```text
-Save
-```
-
-does ALL of the following:
-
-✅ saves JSON to:
-
-```text
-games/rollback_fighter/moves/
-```
-
-✅ reloads move data
-
-✅ injects generated move into live PlayerState nodes
-
-✅ updates heavy attack timing live
-
----
-
-# ✅ SUCCESS CONDITION
-
-If successful, console should print:
-
-```text
-[GeminiPanel] Applied generated move to 2 PlayerState node(s)
-```
-
-That means:
-
-* Gemini generated valid move data
-* JSON saved successfully
-* move injected into gameplay
-
----
-
-# 🎮 TESTING THE GENERATED MOVE
-
-Press:
-
-```text
-atk_h
-```
-
-to trigger the Gemini-generated heavy attack.
-
-## Example
-
-If startup = 60:
-
-* heavy attack becomes VERY slow
-
-If startup = 1:
-
-* heavy attack becomes nearly instant
-
-This confirms:
-
-> Gemini-generated move timing is controlling live gameplay.
-
----
-
-# 🔄 Rollback Architecture
-
-Current rollback flow:
-
-```text
-Input
-↓
-RollbackNetworkSession
-↓
-Prediction
-↓
-Snapshot History
-↓
-Late Packet Arrival
-↓
-Rollback + Replay
-↓
-Corrected Present
-```
-
-The rollback layer is intentionally separated from:
-
-* Gemini
-* networking transport
-* rendering
-
-This preserves deterministic simulation integrity. 
-
----
-
-# 🧠 Current Architecture
-
-```text
-Gemini Prompt
-↓
-GeminiClient
-↓
-Gemini JSON
-↓
-ConfigFactory
-↓
-Move JSON
-↓
-PlayerState
-↓
-Rollback Simulation
-↓
-CombatSystem
-↓
-Rendering
-```
-
----
-
-# 🎯 Hackathon Goal
-
-Demonstrate:
-
-> AI-assisted deterministic multiplayer gameplay systems.
-
-The key technical challenge:
-
-* constraining AI outputs
-* preserving rollback synchronization
-* maintaining deterministic replay safety
-
----
-
-# 🧪 Recommended Demo Flow
-
-## Demo 1 — Fast Move
-
-Generate:
-
-```text
-startup 1
-```
-
-Show instant heavy attack.
-
----
-
-## Demo 2 — Slow Move
-
-Generate:
-
-```text
-startup 60
-```
-
-Show extremely delayed heavy attack.
-
----
-
-## Demo 3 — Multiplayer
-
-Run rollback multiplayer session.
-
-Show:
-
-* generated move still synchronizes
-* rollback still functions
-* deterministic replay preserved
-
----
-
-# 📌 Current Status
-
-## Implemented
-
-✅ rollback replay
-✅ deterministic simulation
-✅ synchronized multiplayer prototype
-✅ Gemini move generation
-✅ JSON save pipeline
-✅ live gameplay injection
-✅ rollback-safe combat prototype
-
----
-
-## In Progress
-
-⚠️ higher latency testing
-⚠️ multiplayer polish
-⚠️ XR experiments
-⚠️ advanced move balancing tools
-
----
-
-# 🧠 Philosophy
-
-Small deterministic systems that scale into anything.
-
-Current priorities:
-
-* rollback correctness
-* deterministic simulation
-* transport-independent architecture
-* understandable systems
-* rapid iteration
-
----
-
-# Built By
-
-Alonso Rojas
-
-LinkedIn:
-[Alonso Rojas LinkedIn](https://www.linkedin.com/in/alonso-rojas-617546126/?utm_source=chatgpt.com)
 
 
 
