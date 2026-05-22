@@ -1,13 +1,13 @@
-[gd_scene load_steps=2 format=3 uid="uid://3a5aul0owvlf"]
+[gd_scene format=3 uid="uid://3a5aul0owvlf"]
 
-[ext_resource type="Script" path="res://addons/gemini_integration/tools/GeminiConfigGeneratorPanel.gd" id="1_gnlvr"]
+[ext_resource type="Script" uid="uid://d3mpop8yo7rdg" path="res://addons/gemini_integration/tools/GeminiConfigGeneratorPanel.gd" id="1_gnlvr"]
 
-[node name="Control" type="Control"]
+[node name="Control" type="Control" unique_id=136292410]
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_gnlvr")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=8754784]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -15,44 +15,44 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer" unique_id=1537021746]
 layout_mode = 2
 
-[node name="OptionsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="OptionsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=1189617206]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/OptionsRow"]
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/OptionsRow" unique_id=743138888]
 layout_mode = 2
 text = "HELLO GEMINI PANEL "
 
-[node name="DomainOption" type="OptionButton" parent="MarginContainer/VBoxContainer/OptionsRow"]
+[node name="DomainOption" type="OptionButton" parent="MarginContainer/VBoxContainer/OptionsRow" unique_id=564679103]
 layout_mode = 2
 
-[node name="Label2" type="Label" parent="MarginContainer/VBoxContainer/OptionsRow"]
+[node name="Label2" type="Label" parent="MarginContainer/VBoxContainer/OptionsRow" unique_id=1405970947]
 layout_mode = 2
 
-[node name="SchemaOption" type="OptionButton" parent="MarginContainer/VBoxContainer/OptionsRow"]
+[node name="SchemaOption" type="OptionButton" parent="MarginContainer/VBoxContainer/OptionsRow" unique_id=1297463386]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer" unique_id=490495567]
 layout_mode = 2
 
-[node name="PromptEdit" type="TextEdit" parent="MarginContainer/VBoxContainer"]
+[node name="PromptEdit" type="TextEdit" parent="MarginContainer/VBoxContainer" unique_id=812726467]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ButtonsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="ButtonsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=212823292]
 layout_mode = 2
 
-[node name="GenerateButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsRow"]
+[node name="GenerateButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsRow" unique_id=1130605404]
 layout_mode = 2
 
-[node name="SaveButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsRow"]
+[node name="SaveButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsRow" unique_id=1345246446]
 layout_mode = 2
 
-[node name="JsonPreview" type="TextEdit" parent="MarginContainer/VBoxContainer"]
+[node name="JsonPreview" type="TextEdit" parent="MarginContainer/VBoxContainer" unique_id=625602836]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 
-[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer" unique_id=1394679741]
 layout_mode = 2
