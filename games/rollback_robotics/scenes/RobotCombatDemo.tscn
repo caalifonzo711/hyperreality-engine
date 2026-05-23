@@ -1,0 +1,29 @@
+[gd_scene format=3 uid="uid://y23xlhbokopn"]
+
+[ext_resource type="Script" uid="uid://bbxl8om1dduct" path="res://games/rollback_robotics/scripts/RobotCombatDemo.gd" id="1_nmw7r"]
+[ext_resource type="Script" uid="uid://dawuxb2pmtpqx" path="res://games/rollback_robotics/scripts/adapters/SimRobotAdapter.gd" id="2_ctb2u"]
+[ext_resource type="Script" uid="uid://c286f1bhmj1or" path="res://games/rollback_robotics/scripts/ui/RobotDebugUI.gd" id="3_ctb2u"]
+
+[node name="RobotCombatDemo" type="Node2D" unique_id=1480882106]
+script = ExtResource("1_nmw7r")
+
+[node name="ArenaRoot" type="Node2D" parent="." unique_id=784597772]
+
+[node name="SimArmP1" type="Node2D" parent="ArenaRoot" unique_id=1922738176]
+position = Vector2(-250, 100)
+script = ExtResource("2_ctb2u")
+
+[node name="SimArmP2" type="Node2D" parent="ArenaRoot" unique_id=813263405]
+position = Vector2(250, 100)
+script = ExtResource("2_ctb2u")
+
+[node name="Camera2D" type="Camera2D" parent="ArenaRoot" unique_id=1914902027]
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1138575397]
+
+[node name="RobotDebugUI" type="Control" parent="CanvasLayer" unique_id=711849809]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("3_ctb2u")

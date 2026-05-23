@@ -13,8 +13,8 @@ extends Node2D
 #   ENET_IP := "DESKTOP_IPV4_HERE"
 # -------------------------------------------------
 const USE_ENET := true
-const ENET_HOST := true
-const ENET_IP := "127.0.0.1"
+const ENET_HOST := false
+const ENET_IP := "100.124.203.88"
 const ENET_PORT := 7777
 
 # -------------------------------------------------
@@ -99,6 +99,7 @@ func _ready() -> void:
 
 	if USE_ENET:
 		transport = ENetTransportScene.new()
+		transport.name = "ENetTransport"
 		transport.artificial_delay_frames = BENCHMARK_DELAY_FRAMES
 		transport.artificial_jitter_frames = BENCHMARK_JITTER_FRAMES
 		add_child(transport)

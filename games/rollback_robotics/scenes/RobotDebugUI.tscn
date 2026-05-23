@@ -1,0 +1,88 @@
+[gd_scene format=3 uid="uid://c06mia1q00ick"]
+
+[ext_resource type="Script" uid="uid://c286f1bhmj1or" path="res://games/rollback_robotics/scripts/ui/RobotDebugUI.gd" id="1_ep5ub"]
+
+[node name="RobotDebugUI" type="Control" unique_id=1329398054]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_ep5ub")
+
+[node name="Panel" type="Panel" parent="." unique_id=2138737966]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel" unique_id=284939132]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Title" type="Label" parent="Panel/VBoxContainer" unique_id=1713515905]
+layout_mode = 2
+
+[node name="StateLabel" type="Label" parent="Panel/VBoxContainer" unique_id=1786284467]
+layout_mode = 2
+text = "State: Idle
+"
+
+[node name="ProfileLabel" type="Label" parent="Panel/VBoxContainer" unique_id=1201996466]
+layout_mode = 2
+text = "Profile: Snappy"
+
+[node name="FrameLabel" type="Label" parent="Panel/VBoxContainer" unique_id=580439014]
+layout_mode = 2
+text = "Frame: 0
+"
+
+[node name="CommandInput" type="LineEdit" parent="Panel/VBoxContainer" unique_id=1447660390]
+layout_mode = 2
+placeholder_text = "type command: dramatic jab"
+
+[node name="ButtonRow" type="HBoxContainer" parent="Panel/VBoxContainer" unique_id=43237892]
+layout_mode = 2
+
+[node name="JabButton" type="Button" parent="Panel/VBoxContainer/ButtonRow" unique_id=1939535174]
+layout_mode = 2
+text = "Jab"
+
+[node name="HeavyButton" type="Button" parent="Panel/VBoxContainer/ButtonRow" unique_id=361756561]
+layout_mode = 2
+text = "Heavy"
+
+[node name="BlockButton" type="Button" parent="Panel/VBoxContainer/ButtonRow" unique_id=934192894]
+layout_mode = 2
+text = "Block"
+
+[node name="WaveButton" type="Button" parent="Panel/VBoxContainer/ButtonRow" unique_id=327984947]
+layout_mode = 2
+text = "Wave"
+
+[node name="GrabButton" type="Button" parent="Panel/VBoxContainer/ButtonRow" unique_id=168842886]
+layout_mode = 2
+text = "Grab"
+
+[node name="ProfileRow" type="HBoxContainer" parent="Panel/VBoxContainer" unique_id=1057294400]
+layout_mode = 2
+
+[node name="SnappyButton" type="Button" parent="Panel/VBoxContainer/ProfileRow" unique_id=1855608927]
+layout_mode = 2
+text = "Snappy"
+
+[node name="HeavyProfileButton" type="Button" parent="Panel/VBoxContainer/ProfileRow" unique_id=1376071069]
+layout_mode = 2
+text = "Heavy"
+
+[node name="DefensiveButton" type="Button" parent="Panel/VBoxContainer/ProfileRow" unique_id=1338399741]
+layout_mode = 2
+text = "Defensive"
+
+[node name="DramaticButton" type="Button" parent="Panel/VBoxContainer/ProfileRow" unique_id=1689388384]
+layout_mode = 2
+text = "Dramatic"
+
+[node name="Log" type="RichTextLabel" parent="Panel/VBoxContainer" unique_id=816893480]
+layout_mode = 2
+bbcode_enabled = true
+text = "[b]Robot Log[/b]
+Ready.
+"
