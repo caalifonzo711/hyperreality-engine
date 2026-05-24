@@ -1,4 +1,4 @@
-# SyncStrike QA Benchmark Demo — Gemini Rollback Fighter
+# SyncStrike QA Benchmark Demo — Gemini Rollback Fighter (now with AgileX piper arm support)
 <img width="426" height="240" alt="Video Project 3" src="https://github.com/user-attachments/assets/46603c88-e152-46e4-9287-bebcbb2eb5f4" />
 
 
