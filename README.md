@@ -4,6 +4,141 @@
 
 
 A deterministic rollback multiplayer fighter with Gemini-generated move data and automated two-PC QA benchmarking.
+# HyperRobotics — Rollback Interaction Systems for Physical AI
+
+## HackStorm 2.0 Submission Concept
+
+HyperRobotics explores how fighting-game-grade interaction systems can improve real-time robotics responsiveness.
+
+Most robotics systems focus on autonomy, navigation, or task completion. Our focus is different:
+
+```text
+How do we make physical AI feel responsive,
+predictable,
+and expressive in real time?
+```
+
+This project applies deterministic rollback architecture, state-machine-driven interaction design, and low-latency multiplayer synchronization principles from competitive games to physical robotics systems.
+
+## Core Idea
+
+```text
+Human Input
+↓
+Gemini Intent Parsing
+↓
+Deterministic Robot Command State
+↓
+Rollback-Safe Action Pipeline
+↓
+Robot Adapter Layer
+↓
+Physical Robotics Motion
+```
+
+Instead of allowing AI to directly control robotics behavior, Gemini only generates structured command data.
+
+The engine remains authoritative over:
+
+* timing
+* motion states
+* rollback safety
+* deterministic replay
+* synchronization
+* interaction constraints
+
+This separation allows AI-assisted robotics behavior without sacrificing simulation stability or predictable interaction.
+
+## Why This Matters
+
+Most AI robotics demos are:
+
+* asynchronous
+* high-latency
+* difficult to predict
+* disconnected from human timing expectations
+
+HyperRobotics investigates whether game-engine interaction systems can improve:
+
+* robotics responsiveness
+* remote robotics synchronization
+* expressive motion behavior
+* latency compensation
+* human-machine interaction feel
+
+## Key Technical Concepts
+
+* Deterministic state machines
+* Rollback-inspired correction architecture
+* Input prediction
+* Structured AI command generation
+* Transport-agnostic robotics adapters
+* Multiplayer synchronization concepts
+* Real-time interaction systems
+
+## Robotics Transport Architecture
+
+The system abstracts robotics hardware behind adapter layers:
+
+```text
+Engine Command
+↓
+Robot Adapter
+↓
+CAN / Robotics Transport
+↓
+Physical Arm
+```
+
+This allows the same interaction architecture to target:
+
+* simulated robotics
+* physical robotics arms
+* remote synchronized robotics
+* AI-assisted control systems
+
+## Inspiration
+
+This work is inspired by:
+
+* fighting-game rollback networking
+* real-time multiplayer synchronization
+* robotics interaction design
+* low-latency control systems
+* expressive animation state machines
+
+## Current Prototype Status
+
+Implemented:
+
+* Gemini command parsing
+* rollback-inspired robotics state machine
+* deterministic action architecture
+* live robot command generation
+* Windows CAN adapter connectivity
+* Python robotics bridge layer
+* Godot real-time robotics UI
+* transport abstraction architecture
+
+In progress:
+
+* direct Piper SDK hardware control
+* motion profile tuning
+* synchronized dual-arm experiments
+* remote robotics interaction research
+
+## HyperRobotics Vision
+
+The long-term vision is to explore:
+
+```text
+“Can physical AI interaction feel as responsive,
+predictable,
+and expressive
+as a competitive multiplayer game?”
+```
+
+This extends the user’s earlier rollback networking and Gemini integration work into physical robotics interaction systems. 
 
 ## What This Demo Shows
 
