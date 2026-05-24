@@ -1,4 +1,7 @@
 # SyncStrike QA Benchmark Demo — Gemini Rollback Fighter
+<img width="426" height="240" alt="Video Project 3" src="https://github.com/user-attachments/assets/46603c88-e152-46e4-9287-bebcbb2eb5f4" />
+
+
 
 A deterministic rollback multiplayer fighter with Gemini-generated move data and automated two-PC QA benchmarking.
 
