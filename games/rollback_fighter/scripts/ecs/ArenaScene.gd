@@ -14,7 +14,7 @@ extends Node2D
 # -------------------------------------------------
 const USE_ENET := true
 const ENET_HOST := false
-const ENET_IP := "100.124.203.88"
+const ENET_IP := "xxx.xxx.xxx.xx"
 const ENET_PORT := 7777
 
 # -------------------------------------------------
