@@ -5,7 +5,7 @@ const GeminiHttpClient = preload("res://addons/gemini_integration/src/GeminiHttp
 const GeminiSchemas    = preload("res://config/gemini_schemas.gd")
 
 var _http_client: GeminiHttpClient
-var _api_key: String = "AIzaSyBE84pB3EmEpTziQ1oF3qmCs59JjmIftvo"  # read from environment only
+var _api_key: String = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # read from environment only
 
 # Model + correct API VERSION from AI Studio
 const GEMINI_MODEL_ID := "gemini-3-pro-preview"
