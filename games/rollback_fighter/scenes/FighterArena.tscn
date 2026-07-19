@@ -4,7 +4,6 @@
 [ext_resource type="Texture2D" uid="uid://cwsw0lo2c3uxm" path="res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png" id="2_3yeda"]
 [ext_resource type="Script" uid="uid://4rkycp50qkoc" path="res://games/rollback_fighter/scripts/ui/DebugHUD.gd" id="2_7m30v"]
 [ext_resource type="Script" uid="uid://gon43cbttlu0" path="res://games/rollback_fighter/scripts/PlayerSpriteDebug.gd" id="2_7wkn7"]
-[ext_resource type="Texture2D" uid="uid://v3d06m1ii3gg" path="res://games/rollback_fighter/characters/example_fighter/sprites/Screenshot 2026-05-12 145345.png" id="2_gxfc1"]
 [ext_resource type="Script" uid="uid://cutyblay3sxk0" path="res://games/rollback_fighter/scripts/ui/HUD.gd" id="3_ggfo4"]
 [ext_resource type="Script" uid="uid://circviosvlfcp" path="res://games/rollback_fighter/scripts/net/FighterRollbackAdapter.gd" id="4_5hyg5"]
 
@@ -56,7 +55,6 @@ offset_bottom = 1149.0
 grow_horizontal = 2
 grow_vertical = 2
 scale = Vector2(0.4, 0.4)
-texture = ExtResource("2_gxfc1")
 
 [node name="Wall_Left" type="ColorRect" parent="." unique_id=57196029]
 offset_top = 100.0
