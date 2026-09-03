@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="ThirdTry"
-run/main_scene="res://addons/gemini_integration/tools/GeminiConfigGeneratorPanel.tscn"
+run/main_scene="uid://cbwaxqhhnbm7s"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
 
@@ -174,4 +174,6 @@ dodge_2={
 
 [rendering]
 
-renderer/rendering_method="mobile"
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true

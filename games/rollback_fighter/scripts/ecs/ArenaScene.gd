@@ -6,15 +6,17 @@ extends Node2D
 # Machine config
 # DESKTOP:
 #   ENET_HOST := true
-#   ENET_IP := "127.0.0.1"
+#   ENET_IP := "xxx.x.x.x"
 #
 # LAPTOP:
 #   ENET_HOST := false
 #   ENET_IP := "DESKTOP_IPV4_HERE"
 # -------------------------------------------------
-const USE_ENET := true
-const ENET_HOST := false
-const ENET_IP := "100.124.203.88"
+
+
+const USE_ENET := true #check #back to laptop
+const ENET_HOST := false #check 
+const ENET_IP := "xxx.xxx.xxx.xx" 
 const ENET_PORT := 7777
 
 # -------------------------------------------------
@@ -30,7 +32,7 @@ const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 # 6  = ~100ms
 # 9  = ~150ms
 # 12 = ~200ms
-const BENCHMARK_DELAY_FRAMES := 12
+const BENCHMARK_DELAY_FRAMES := 9
 const BENCHMARK_JITTER_FRAMES := 1
 const BENCHMARK_INPUT_DELAY_FRAMES := 3 #for tuning test 3, 4, 6
 
@@ -296,11 +298,15 @@ func _print_benchmark_results() -> void:
 	print("RollbackCount: %d" % int(rollback_session.rollback_count))
 	print("MaxRollbackDepth: %d" % int(rollback_session.max_rollback_depth))
 	print("PredictionMisses: %d" % int(rollback_session.prediction_misses))
-	print("ChecksumMismatch: NOT_IMPLEMENTED")
+
+	print("ChecksumFramesCompared: %d" % int(rollback_session.checksum_frames_compared))
+	print("ChecksumMismatchCount: %d" % int(rollback_session.checksum_mismatch_count))
+	print("ChecksumMismatch: %s" % str(rollback_session.checksum_mismatch))
+	print("FirstChecksumMismatchFrame: %d" % int(rollback_session.first_checksum_mismatch_frame))
+
 	print("InputDelayFrames: %d" % BENCHMARK_INPUT_DELAY_FRAMES)
 	print("===============================================")
 	print("")
-
 
 func _update_wall_state() -> void:
 	player_state.set_touching_wall(
@@ -366,7 +372,8 @@ func _update_rollback_debug_hud() -> void:
 			"Mode=%s | Connected=%s | Bot=%s\n" +
 			"Delay=%d | Jitter=%d | BenchmarkDone=%s\n" +
 			"Packets=%d | LastRemoteFrame=%d | Gap=%d\n" +
-			"Rollback count=%d | Max depth=%d | Misses=%d"
+			"Rollback count=%d | Max depth=%d | Misses=%d\n" +
+			"Checksum compared=%d | Mismatches=%d | First=%d"
 		) % [
 			mode_text,
 			str(connected),
@@ -379,7 +386,10 @@ func _update_rollback_debug_hud() -> void:
 			_frame_gap(),
 			int(rollback_session.rollback_count),
 			int(rollback_session.max_rollback_depth),
-			int(rollback_session.prediction_misses)
+			int(rollback_session.prediction_misses),
+			int(rollback_session.checksum_frames_compared),
+			int(rollback_session.checksum_mismatch_count),
+			int(rollback_session.first_checksum_mismatch_frame)
 		]
 
 
