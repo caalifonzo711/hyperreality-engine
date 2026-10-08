@@ -4,3 +4,4 @@
 
 [node name="Main" type="Node2D" unique_id=184895578]
 script = ExtResource("1_2ad65")
+metadata/_edit_lock_ = true

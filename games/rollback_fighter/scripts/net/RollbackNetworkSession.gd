@@ -29,13 +29,9 @@ var transport: Node = null
 # Checksum state
 # =================================================
 
-# Most recently generated / received values.
-# Kept for simple HUD/debugging compatibility.
 var local_checksum: int = 0
 var remote_checksum: int = 0
 
-# True if there are currently any unresolved
-# frame-aligned checksum mismatches.
 var checksum_mismatch: bool = false
 
 # Checksums stored by simulation frame.
@@ -96,9 +92,6 @@ func reset_session() -> void:
 	packets_received = 0
 	last_remote_frame = -1
 
-	# -----------------------------
-	# Reset checksum state
-	# -----------------------------
 	local_checksum = 0
 	remote_checksum = 0
 	checksum_mismatch = false
@@ -153,12 +146,10 @@ func _compute_checksum() -> int:
 
 	var snapshot: Dictionary = adapter.capture()
 
-	# First-pass implementation:
-	# use Godot's hash of our rollback snapshot.
-	#
-	# If Windows <-> Android later produces suspicious
-	# platform-specific mismatches, this is the function
-	# we can replace with explicit canonical serialization.
+	# First-pass checksum.
+	# If this still produces suspicious mismatches after
+	# frame timing is fixed, this is the next thing to replace
+	# with canonical ordered state serialization.
 	return snapshot.hash()
 
 
@@ -182,8 +173,9 @@ func _record_local_checksum(frame: int, send_to_peer: bool = true) -> void:
 
 	local_checksums[frame] = local_checksum
 
-	# If the remote checksum already arrived,
-	# compare the same simulation frame now.
+	# If the remote checksum already exists, try comparing.
+	# This is safe because _try_compare_checksum also checks
+	# whether the real remote input exists.
 	_try_compare_checksum(frame)
 
 	if send_to_peer:
@@ -197,11 +189,8 @@ func _try_compare_checksum(frame: int) -> void:
 	if not remote_checksums.has(frame):
 		return
 
-	# Do not treat a frame as authoritative until
-	# we have received the real remote input for it.
-	#
-	# Before that, our state may legitimately contain
-	# prediction and temporarily differ from the peer.
+	# Do not compare a frame while we are still missing
+	# the real remote input for that frame.
 	if not remote_inputs.has(frame):
 		return
 
@@ -210,9 +199,7 @@ func _try_compare_checksum(frame: int) -> void:
 
 	var matches: bool = (local_value == remote_value)
 
-	# -----------------------------------------
-	# First comparison for this frame
-	# -----------------------------------------
+	# First comparison for this frame.
 	if not checksum_comparison_results.has(frame):
 		checksum_comparison_results[frame] = matches
 		checksum_frames_compared += 1
@@ -220,13 +207,10 @@ func _try_compare_checksum(frame: int) -> void:
 		if not matches:
 			checksum_mismatch_count += 1
 
-	# -----------------------------------------
-	# Frame was compared before, but rollback
-	# may have changed its final checksum.
-	# Update the existing result instead of
-	# counting the frame twice.
-	# -----------------------------------------
 	else:
+		# Frame may have been corrected by rollback after
+		# an earlier comparison. Update the existing result
+		# instead of counting the same frame twice.
 		var previous_match: bool = bool(
 			checksum_comparison_results[frame]
 		)
@@ -235,15 +219,11 @@ func _try_compare_checksum(frame: int) -> void:
 			checksum_comparison_results[frame] = matches
 
 			if matches:
-				# A temporary mismatch was corrected
-				# after rollback/replay.
 				checksum_mismatch_count = maxi(
 					checksum_mismatch_count - 1,
 					0
 				)
 			else:
-				# A frame that previously matched
-				# now disagrees after correction.
 				checksum_mismatch_count += 1
 
 	_refresh_checksum_status()
@@ -269,7 +249,7 @@ func _refresh_checksum_status() -> void:
 
 
 func _handle_checksum_packet(packet: Dictionary) -> void:
-	# Ignore a checksum packet claiming to be ours.
+	# Ignore checksum packets claiming to be ours.
 	if int(packet.get("player_id", -1)) == player_id:
 		return
 
@@ -283,8 +263,8 @@ func _handle_checksum_packet(packet: Dictionary) -> void:
 	remote_checksum = checksum
 	remote_checksums[frame] = checksum
 
-	# Compare only against OUR checksum for
-	# the exact same simulation frame.
+	# This may do nothing if the real input/state for
+	# the matching frame is not ready yet.
 	_try_compare_checksum(frame)
 
 
@@ -331,7 +311,7 @@ func tick(local_input: Dictionary) -> void:
 	local_inputs[input_frame] = local_input.duplicate(true)
 
 	# =================================================
-	# Send input packet
+	# Send local input
 	# =================================================
 
 	if transport and transport.has_method("send_packet"):
@@ -356,8 +336,6 @@ func tick(local_input: Dictionary) -> void:
 		remote_input = _predict_remote_input(current_frame)
 
 	# Save PRE-SIMULATION snapshot.
-	# This is the state we restore if this frame
-	# later needs to be replayed.
 	snapshots[current_frame] = adapter.capture()
 
 	# =================================================
@@ -387,14 +365,11 @@ func tick(local_input: Dictionary) -> void:
 	if remote_checksums.has(old_frame):
 		remote_checksums.erase(old_frame)
 
-	# NOTE:
-	# checksum_comparison_results is intentionally NOT
-	# erased here. It is tiny (~3600 entries for a
-	# 60-second benchmark) and preserves benchmark-wide
-	# checksum statistics.
+	# Keep checksum_comparison_results for the whole
+	# benchmark so final stats stay intact.
 
 	# =================================================
-	# Simulate frame
+	# Simulate current frame
 	# =================================================
 
 	_simulate_frame(
@@ -402,13 +377,7 @@ func tick(local_input: Dictionary) -> void:
 		remote_input
 	)
 
-	# =================================================
-	# Compute + send checksum AFTER simulation.
-	#
-	# This checksum represents the resulting state
-	# after current_frame has been simulated.
-	# =================================================
-
+	# Checksum represents state AFTER this frame.
 	_record_local_checksum(
 		current_frame,
 		true
@@ -476,28 +445,39 @@ func _on_packet_received(packet: Dictionary) -> void:
 
 	remote_inputs[frame] = input_data.duplicate(true)
 
-	# Now that the real remote input exists,
-	# a checksum for this frame may be eligible
-	# for comparison.
+	# =================================================
+	# IMPORTANT FIX:
+	#
+	# Do NOT compare checksum here yet.
+	#
+	# First determine whether this newly received real
+	# input invalidates a prediction.
+	#
+	# If so, rollback/replay must finish BEFORE we
+	# compare the checksum for this frame.
+	# =================================================
+
+	if frame < current_frame:
+		if predicted_remote_inputs.has(frame):
+			var predicted: Dictionary = (
+				predicted_remote_inputs[frame]
+			)
+
+			if predicted.hash() != input_data.hash():
+				prediction_misses += 1
+
+				# Correct the simulation FIRST.
+				_rollback_and_replay(frame)
+
+	# =================================================
+	# NOW compare.
+	#
+	# At this point, if rollback was required, the
+	# historical state/checksum has already been
+	# recomputed using the real remote input.
+	# =================================================
+
 	_try_compare_checksum(frame)
-
-	# Future/current packet:
-	# no rollback needed yet.
-	if frame >= current_frame:
-		return
-
-	# =================================================
-	# Prediction correction
-	# =================================================
-
-	if predicted_remote_inputs.has(frame):
-		var predicted: Dictionary = (
-			predicted_remote_inputs[frame]
-		)
-
-		if predicted.hash() != input_data.hash():
-			prediction_misses += 1
-			_rollback_and_replay(frame)
 
 
 # =================================================
@@ -525,8 +505,7 @@ func _rollback_and_replay(from_frame: int) -> void:
 		rollback_depth
 	)
 
-	# Restore the PRE-SIMULATION state
-	# for the first incorrect frame.
+	# Restore PRE-SIM state for first incorrect frame.
 	adapter.restore(
 		snapshots[from_frame]
 	)
@@ -543,6 +522,7 @@ func _rollback_and_replay(from_frame: int) -> void:
 
 		if remote_inputs.has(replay_frame):
 			remote_input = remote_inputs[replay_frame]
+
 			_last_remote_input = (
 				remote_input.duplicate(true)
 			)
@@ -551,25 +531,17 @@ func _rollback_and_replay(from_frame: int) -> void:
 				replay_frame
 			)
 
-		# Save corrected PRE-SIM snapshot.
+		# Corrected PRE-SIM snapshot.
 		snapshots[replay_frame] = adapter.capture()
 
-		# Re-simulate the frame.
+		# Replay this historical frame.
 		_simulate_frame(
 			local_input,
 			remote_input
 		)
 
-		# =================================================
-		# IMPORTANT:
-		# Rollback may have changed the state produced
-		# by this historical frame.
-		#
-		# Recompute its checksum AND resend it so the
-		# peer can replace an earlier checksum that may
-		# have represented predicted state.
-		# =================================================
-
+		# Recompute + resend the checksum because this
+		# historical frame may now contain corrected state.
 		_record_local_checksum(
 			replay_frame,
 			true

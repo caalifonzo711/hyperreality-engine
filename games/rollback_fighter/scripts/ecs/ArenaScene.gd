@@ -16,7 +16,7 @@ extends Node2D
 
 const USE_ENET := true #check #back to laptop
 const ENET_HOST := false #check 
-const ENET_IP := "xxx.xxx.xxx.xx" 
+const ENET_IP :=  "100.124.203.88" #tailscale "127.0.0.1" #(android) "192.168.1.126" #default 
 const ENET_PORT := 7777
 
 # -------------------------------------------------
