@@ -15,8 +15,8 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="ThirdTry"
-run/main_scene="uid://cbwaxqhhnbm7s"
-config/features=PackedStringArray("4.6", "Mobile")
+run/main_scene="res://games/rollback_fighter/scenes/FighterArena.tscn"
+config/features=PackedStringArray("4.3", "Mobile")
 config/icon="res://icon.svg"
 
 [autoload]

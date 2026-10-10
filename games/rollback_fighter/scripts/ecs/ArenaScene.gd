@@ -15,8 +15,8 @@ extends Node2D
 
 
 const USE_ENET := true #check #back to laptop
-const ENET_HOST := false #check 
-const ENET_IP := "xxx.xxx.xxx.xx" 
+const ENET_HOST := true #check 
+const ENET_IP := "127.0.0.1" #"100.124.203.88"
 const ENET_PORT := 7777
 
 # -------------------------------------------------
