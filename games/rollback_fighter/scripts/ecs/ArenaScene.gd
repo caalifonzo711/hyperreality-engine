@@ -15,13 +15,8 @@ extends Node2D
 
 
 const USE_ENET := true #check #back to laptop
-
 const ENET_HOST := true #check 
-const ENET_IP := "" 
-
-const ENET_HOST := false #check 
-const ENET_IP :=  #check
-
+const ENET_IP := "127.0.0.1" #check
 const ENET_PORT := 7777
 
 # -------------------------------------------------
@@ -493,20 +488,26 @@ func _bind_sprite_to_state(placeholder: Node, state: Node, label: String) -> voi
 
 
 func _on_start_match_received() -> void:
-	print("[Arena] start_match received. Starting rollback session.")
+	if rollback_session == null:
+		return
 
-	if rollback_session != null:
-		rollback_session.start_session()
-		_start_benchmark_timer()
+	if bool(rollback_session.match_started):
+		print("[Arena] Duplicate start_match ignored.")
+		return
+
+	print("[Arena] start_match received. Starting rollback session.")
+	rollback_session.start_session()
+	_start_benchmark_timer()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_accept"):
 		if transport != null and transport.has_method("send_start_match"):
-			print("[Arena] Host sending start_match.")
+			if not bool(transport.get("is_host")):
+				return
 
-			if rollback_session != null:
-				rollback_session.start_session()
-				_start_benchmark_timer()
+			if rollback_session != null and bool(rollback_session.match_started):
+				return
 
+			print("[Arena] Host requesting start_match.")
 			transport.send_start_match()

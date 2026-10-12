@@ -24,6 +24,7 @@ var is_connected: bool = false
 var remote_peer_id: int = 0
 
 var _delayed_packets: Array[Dictionary] = []
+var _start_match_sent: bool = false
 
 
 func host(host_port: int = 7777) -> void:
@@ -183,14 +184,13 @@ func send_start_match() -> void:
 	if not is_connected:
 		return
 
-	if is_host:
-		if remote_peer_id == 0:
-			return
-		_rpc_start_match.rpc_id(remote_peer_id)
-	else:
-		_rpc_start_match.rpc_id(1)
+	if not is_host or remote_peer_id == 0 or _start_match_sent:
+		return
+
+	_start_match_sent = true
+	_rpc_start_match.rpc()
 
 
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _rpc_start_match() -> void:
 	start_match_received.emit()
