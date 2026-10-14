@@ -52,6 +52,12 @@ var _p1_heavy_buf: int = 0
 var _p2_light_buf: int = 0
 var _p2_heavy_buf: int = 0
 
+# Non-authoritative first-mismatch report retained for the benchmark summary.
+var first_debug_frame: int = -1
+var first_debug_field: String = ""
+var first_debug_local: String = ""
+var first_debug_remote: String = ""
+
 
 func setup(_p1: PlayerState, _p2: PlayerState, _input: Node, _lean: Node, _combat: Node) -> void:
 	p1_state = _p1
@@ -210,6 +216,12 @@ func _print_debug_difference(
 	local_value: Variant,
 	remote_value: Variant
 ) -> void:
+	if first_debug_frame < 0:
+		first_debug_frame = frame
+		first_debug_field = field
+		first_debug_local = var_to_str(local_value)
+		first_debug_remote = var_to_str(remote_value)
+
 	print("")
 	print("FIRST STATE DIVERGENCE")
 	print("frame=%d" % frame)

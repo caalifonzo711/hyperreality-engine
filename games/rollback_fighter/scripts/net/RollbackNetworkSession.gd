@@ -180,13 +180,13 @@ func _record_local_checksum(frame: int, send_to_peer: bool = true) -> void:
 	# If the remote checksum already exists, try comparing.
 	# This is safe because _try_compare_checksum also checks
 	# whether the real remote input exists.
-	_try_compare_checksum(frame)
+	_try_compare_checksum(frame, true)
 
 	if send_to_peer:
 		_send_checksum_packet(frame, local_checksum)
 
 
-func _try_compare_checksum(frame: int) -> void:
+func _try_compare_checksum(frame: int, state_is_current: bool = false) -> void:
 	if not local_checksums.has(frame):
 		return
 
@@ -239,7 +239,10 @@ func _try_compare_checksum(frame: int) -> void:
 		and _first_state_debug_frame < 0
 	):
 		_first_state_debug_frame = frame
-		_send_first_state_debug(frame, false)
+		var debug_snapshot: Dictionary = {}
+		if state_is_current:
+			debug_snapshot = adapter.capture()
+		_send_first_state_debug(frame, false, debug_snapshot)
 
 
 func _refresh_checksum_status() -> void:
@@ -282,8 +285,14 @@ func _handle_checksum_packet(packet: Dictionary) -> void:
 
 
 # Single debug send path. Player 1 sends the probe; player 2 sends the reply.
-func _send_first_state_debug(frame: int, is_reply: bool) -> void:
-	var snapshot: Dictionary = snapshots.get(frame + 1, {})
+func _send_first_state_debug(
+	frame: int,
+	is_reply: bool,
+	snapshot_override: Dictionary = {}
+) -> void:
+	var snapshot: Dictionary = snapshot_override
+	if snapshot.is_empty():
+		snapshot = snapshots.get(frame + 1, {})
 
 	if (
 		snapshot.is_empty()
@@ -342,7 +351,7 @@ func _handle_first_state_debug(packet: Dictionary) -> void:
 	)
 
 	if player_id == 2:
-		_send_first_state_debug(frame, true)
+		_send_first_state_debug(frame, true, snapshot)
 
 
 # =================================================
