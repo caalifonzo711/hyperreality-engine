@@ -32,8 +32,8 @@ const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 # 6  = ~100ms
 # 9  = ~150ms
 # 12 = ~200ms
-const BENCHMARK_DELAY_FRAMES := 9
-const BENCHMARK_JITTER_FRAMES := 1
+const BENCHMARK_DELAY_FRAMES := 0
+const BENCHMARK_JITTER_FRAMES := 0
 const BENCHMARK_INPUT_DELAY_FRAMES := 3 #for tuning test 3, 4, 6
 
 @onready var player_state := PlayerState.new()

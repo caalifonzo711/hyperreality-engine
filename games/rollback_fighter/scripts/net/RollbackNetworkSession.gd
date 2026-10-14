@@ -48,6 +48,9 @@ var checksum_frames_compared: int = 0
 var checksum_mismatch_count: int = 0
 var first_checksum_mismatch_frame: int = -1
 
+# -1 until player 1 selects the single frame to inspect.
+var _first_state_debug_frame: int = -1
+
 
 # =================================================
 # Prediction cache
@@ -103,6 +106,7 @@ func reset_session() -> void:
 	checksum_frames_compared = 0
 	checksum_mismatch_count = 0
 	first_checksum_mismatch_frame = -1
+	_first_state_debug_frame = -1
 
 	_last_remote_input = _empty_input()
 
@@ -228,6 +232,15 @@ func _try_compare_checksum(frame: int) -> void:
 
 	_refresh_checksum_status()
 
+	# First-mismatch trigger.
+	if (
+		not matches
+		and player_id == 1
+		and _first_state_debug_frame < 0
+	):
+		_first_state_debug_frame = frame
+		_send_first_state_debug(frame, false)
+
 
 func _refresh_checksum_status() -> void:
 	checksum_mismatch = checksum_mismatch_count > 0
@@ -266,6 +279,70 @@ func _handle_checksum_packet(packet: Dictionary) -> void:
 	# This may do nothing if the real input/state for
 	# the matching frame is not ready yet.
 	_try_compare_checksum(frame)
+
+
+# Single debug send path. Player 1 sends the probe; player 2 sends the reply.
+func _send_first_state_debug(frame: int, is_reply: bool) -> void:
+	var snapshot: Dictionary = snapshots.get(frame + 1, {})
+
+	if (
+		snapshot.is_empty()
+		and (current_frame == frame or current_frame == frame + 1)
+	):
+		snapshot = adapter.capture()
+
+	if snapshot.is_empty():
+		print("[StateDebug] State unavailable for frame %d" % frame)
+		return
+
+	transport.send_packet({
+		"type": "first_state_debug",
+		"frame": frame,
+		"player_id": player_id,
+		"reply": is_reply,
+		"values": adapter.canonical_debug_values(snapshot),
+	})
+
+
+# Single debug receive path.
+func _handle_first_state_debug(packet: Dictionary) -> void:
+	if int(packet.get("player_id", -1)) == player_id:
+		return
+
+	var frame: int = int(packet.get("frame", -1))
+	var is_reply: bool = bool(packet.get("reply", false))
+
+	if frame < 0:
+		return
+
+	if player_id == 1:
+		if not is_reply or frame != _first_state_debug_frame:
+			return
+	else:
+		if is_reply or _first_state_debug_frame >= 0:
+			return
+		_first_state_debug_frame = frame
+
+	var snapshot: Dictionary = snapshots.get(frame + 1, {})
+
+	if (
+		snapshot.is_empty()
+		and (current_frame == frame or current_frame == frame + 1)
+	):
+		snapshot = adapter.capture()
+
+	if snapshot.is_empty():
+		print("[StateDebug] State unavailable for frame %d" % frame)
+		return
+
+	adapter.report_first_debug_difference(
+		frame,
+		snapshot,
+		packet.get("values", [])
+	)
+
+	if player_id == 2:
+		_send_first_state_debug(frame, true)
 
 
 # =================================================
@@ -415,6 +492,10 @@ func _on_packet_received(packet: Dictionary) -> void:
 
 	if packet_type == "checksum":
 		_handle_checksum_packet(packet)
+		return
+
+	if packet_type == "first_state_debug":
+		_handle_first_state_debug(packet)
 		return
 
 	# =================================================
