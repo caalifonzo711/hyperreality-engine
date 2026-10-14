@@ -232,17 +232,22 @@ func _try_compare_checksum(frame: int, state_is_current: bool = false) -> void:
 
 	_refresh_checksum_status()
 
-	# First-mismatch trigger.
+	# Follow the earliest mismatch that remains unresolved after replay.
 	if (
-		not matches
-		and player_id == 1
-		and _first_state_debug_frame < 0
+		player_id == 1
+		and _first_state_debug_frame != first_checksum_mismatch_frame
 	):
-		_first_state_debug_frame = frame
-		var debug_snapshot: Dictionary = {}
-		if state_is_current:
-			debug_snapshot = adapter.capture()
-		_send_first_state_debug(frame, false, debug_snapshot)
+		_first_state_debug_frame = first_checksum_mismatch_frame
+
+		if _first_state_debug_frame >= 0:
+			var debug_snapshot: Dictionary = {}
+			if state_is_current and _first_state_debug_frame == frame:
+				debug_snapshot = adapter.capture()
+			_send_first_state_debug(
+				_first_state_debug_frame,
+				false,
+				debug_snapshot
+			)
 
 
 func _refresh_checksum_status() -> void:
@@ -328,7 +333,7 @@ func _handle_first_state_debug(packet: Dictionary) -> void:
 		if not is_reply or frame != _first_state_debug_frame:
 			return
 	else:
-		if is_reply or _first_state_debug_frame >= 0:
+		if is_reply:
 			return
 		_first_state_debug_frame = frame
 
