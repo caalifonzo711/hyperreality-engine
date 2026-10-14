@@ -169,6 +169,16 @@ func canonical_debug_values(snapshot: Dictionary) -> Array:
 	return values
 
 
+func canonical_checksum(snapshot: Dictionary) -> int:
+	var checksum_values: Array = []
+
+	for value in canonical_debug_values(snapshot):
+		checksum_values.append(typeof(value))
+		checksum_values.append(value)
+
+	return checksum_values.hash()
+
+
 func report_first_debug_difference(
 	frame: int,
 	local_snapshot: Dictionary,

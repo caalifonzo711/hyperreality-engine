@@ -37,6 +37,8 @@ var checksum_mismatch: bool = false
 # Checksums stored by simulation frame.
 var local_checksums: Dictionary = {}
 var remote_checksums: Dictionary = {}
+var local_checksum_revisions: Dictionary = {}
+var remote_checksum_revisions: Dictionary = {}
 
 # Comparison result stored by frame.
 # true  = matching
@@ -101,6 +103,8 @@ func reset_session() -> void:
 
 	local_checksums.clear()
 	remote_checksums.clear()
+	local_checksum_revisions.clear()
+	remote_checksum_revisions.clear()
 	checksum_comparison_results.clear()
 
 	checksum_frames_compared = 0
@@ -141,23 +145,17 @@ func _empty_input() -> Dictionary:
 # Checksum helpers
 # =================================================
 
-func _compute_checksum() -> int:
+func _compute_checksum(snapshot: Dictionary) -> int:
 	if adapter == null:
 		return 0
 
-	if not adapter.has_method("capture"):
+	if not adapter.has_method("canonical_checksum"):
 		return 0
 
-	var snapshot: Dictionary = adapter.capture()
-
-	# First-pass checksum.
-	# If this still produces suspicious mismatches after
-	# frame timing is fixed, this is the next thing to replace
-	# with canonical ordered state serialization.
-	return snapshot.hash()
+	return int(adapter.canonical_checksum(snapshot))
 
 
-func _send_checksum_packet(frame: int, checksum: int) -> void:
+func _send_checksum_packet(frame: int, checksum: int, revision: int) -> void:
 	if transport == null:
 		return
 
@@ -169,24 +167,32 @@ func _send_checksum_packet(frame: int, checksum: int) -> void:
 		"frame": frame,
 		"player_id": player_id,
 		"checksum": checksum,
+		"revision": revision,
 	})
 
 
 func _record_local_checksum(frame: int, send_to_peer: bool = true) -> void:
-	local_checksum = _compute_checksum()
+	var snapshot: Dictionary = adapter.capture()
+	local_checksum = _compute_checksum(snapshot)
+	var revision: int = int(local_checksum_revisions.get(frame, 0)) + 1
 
 	local_checksums[frame] = local_checksum
+	local_checksum_revisions[frame] = revision
 
 	# If the remote checksum already exists, try comparing.
 	# This is safe because _try_compare_checksum also checks
 	# whether the real remote input exists.
-	_try_compare_checksum(frame, true)
+	_try_compare_checksum(frame, true, snapshot)
 
 	if send_to_peer:
-		_send_checksum_packet(frame, local_checksum)
+		_send_checksum_packet(frame, local_checksum, revision)
 
 
-func _try_compare_checksum(frame: int, state_is_current: bool = false) -> void:
+func _try_compare_checksum(
+	frame: int,
+	state_is_current: bool = false,
+	current_snapshot: Dictionary = {}
+) -> void:
 	if not local_checksums.has(frame):
 		return
 
@@ -242,7 +248,7 @@ func _try_compare_checksum(frame: int, state_is_current: bool = false) -> void:
 		if _first_state_debug_frame >= 0:
 			var debug_snapshot: Dictionary = {}
 			if state_is_current and _first_state_debug_frame == frame:
-				debug_snapshot = adapter.capture()
+				debug_snapshot = current_snapshot
 			_send_first_state_debug(
 				_first_state_debug_frame,
 				false,
@@ -280,9 +286,17 @@ func _handle_checksum_packet(packet: Dictionary) -> void:
 		return
 
 	var checksum: int = int(packet.get("checksum", 0))
+	var revision: int = int(packet.get("revision", 0))
+	var highest_revision: int = int(
+		remote_checksum_revisions.get(frame, -1)
+	)
+
+	if revision < highest_revision:
+		return
 
 	remote_checksum = checksum
 	remote_checksums[frame] = checksum
+	remote_checksum_revisions[frame] = revision
 
 	# This may do nothing if the real input/state for
 	# the matching frame is not ready yet.
@@ -455,6 +469,12 @@ func tick(local_input: Dictionary) -> void:
 
 	if remote_checksums.has(old_frame):
 		remote_checksums.erase(old_frame)
+
+	if local_checksum_revisions.has(old_frame):
+		local_checksum_revisions.erase(old_frame)
+
+	if remote_checksum_revisions.has(old_frame):
+		remote_checksum_revisions.erase(old_frame)
 
 	# Keep checksum_comparison_results for the whole
 	# benchmark so final stats stay intact.
