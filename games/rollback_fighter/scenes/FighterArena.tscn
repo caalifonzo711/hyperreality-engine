@@ -24,6 +24,7 @@ script = ExtResource("1_vh4xo")
 metadata/_edit_group_ = true
 
 [node name="AttackButton" type="Button" parent="."]
+visible = false
 offset_left = 50.0
 offset_top = 50.0
 offset_right = 108.0
@@ -31,6 +32,7 @@ offset_bottom = 81.0
 text = "Attack"
 
 [node name="DodgeButton" type="Button" parent="."]
+visible = false
 offset_left = 150.0
 offset_top = 50.0
 offset_right = 208.0
@@ -38,6 +40,7 @@ offset_bottom = 81.0
 text = "Dodge"
 
 [node name="FighterTickLabel" type="Label" parent="."]
+visible = false
 offset_left = 10.0
 offset_top = 10.0
 offset_right = 59.0
@@ -146,6 +149,24 @@ layout_mode = 2
 
 [node name="HUD" type="CanvasLayer" parent="."]
 script = ExtResource("3_ggfo4")
+
+[node name="StatusLabel" type="Label" parent="HUD"]
+offset_left = 100.0
+offset_top = 20.0
+offset_right = 700.0
+offset_bottom = 52.0
+theme_override_font_sizes/font_size = 24
+text = "WAITING FOR OPPONENT..."
+horizontal_alignment = 1
+
+[node name="ControlsLabel" type="Label" parent="HUD"]
+offset_left = 80.0
+offset_top = 120.0
+offset_right = 720.0
+offset_bottom = 146.0
+theme_override_font_sizes/font_size = 16
+text = "A / D  Move     J  Light     K  Heavy     L  Block     ,  Dodge"
+horizontal_alignment = 1
 
 [node name="HBoxContainer" type="HBoxContainer" parent="HUD"]
 custom_minimum_size = Vector2(0, 40)

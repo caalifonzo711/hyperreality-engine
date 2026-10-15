@@ -5,7 +5,10 @@ extends CanvasLayer
 @onready var input_l  : Label = $Control/MarginContainer/VBoxContainer/InputLabel
 @onready var replay_l : Label = $Control/MarginContainer/VBoxContainer/ReplayLabel
 
-var shown := true
+var shown := false
+
+func _ready() -> void:
+	visible = shown
 
 func set_tick(t: int) -> void:
 	if tick_l: tick_l.text = "Tick: %d" % t

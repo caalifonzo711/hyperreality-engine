@@ -21,10 +21,10 @@ const ENET_PORT := 7777
 
 # -------------------------------------------------
 # Benchmark config
-# false = human keyboard play
-# true  = deterministic bot benchmark
+# false = normal manual play
+# true  = controlled deterministic QA bot benchmark
 # -------------------------------------------------
-const USE_BOT_INPUT := true
+const QA_BOT_BENCHMARK_ENABLED := false
 const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 
 # Set these on BOTH computers before each test:
@@ -64,6 +64,7 @@ var benchmark_start_frame: int = 0
 @onready var p1_placeholder: Node2D = get_node_or_null("PlayerPlaceholder")
 @onready var p2_placeholder: Node2D = get_node_or_null("OpponentPlaceholder")
 @onready var hud: Node = get_node_or_null("HUD")
+@onready var play_status_label: Label = get_node_or_null("HUD/StatusLabel")
 
 @onready var debug_hud_root: Control = get_node_or_null("DebugHUD/Control")
 @onready var debug_tick_label: Label = debug_hud_root.get_node("MarginContainer/VBoxContainer/TickLabel") if debug_hud_root else null
@@ -135,7 +136,7 @@ func _ready() -> void:
 			transport.start_match_received.connect(_on_start_match_received)
 
 	print("[Arena] Benchmark config | bot=%s delay=%d jitter=%d duration=%d" % [
-		str(USE_BOT_INPUT),
+		str(QA_BOT_BENCHMARK_ENABLED),
 		BENCHMARK_DELAY_FRAMES,
 		BENCHMARK_JITTER_FRAMES,
 		BENCHMARK_DURATION_FRAMES
@@ -143,6 +144,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_update_play_hud()
+
 	if rollback_session and not bool(rollback_session.match_started):
 		_update_visuals()
 		_update_camera(delta)
@@ -183,7 +186,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _collect_local_input() -> Dictionary:
-	if USE_BOT_INPUT:
+	if QA_BOT_BENCHMARK_ENABLED:
 		return _collect_bot_input()
 
 	var mx := Input.get_action_strength("p1_right") - Input.get_action_strength("p1_left")
@@ -230,7 +233,7 @@ func _start_benchmark_timer() -> void:
 		local_player_id,
 		BENCHMARK_DELAY_FRAMES,
 		BENCHMARK_JITTER_FRAMES,
-		str(USE_BOT_INPUT),
+		str(QA_BOT_BENCHMARK_ENABLED),
 		BENCHMARK_DURATION_FRAMES
 	])
 
@@ -266,7 +269,7 @@ func _print_benchmark_results() -> void:
 	print("========== ROLLBACK BENCHMARK RESULT ==========")
 	print("PlayerID: %d" % local_player_id)
 	print("Mode: %s" % ("ENet" if USE_ENET else "LatencyHarness"))
-	print("BotInput: %s" % str(USE_BOT_INPUT))
+	print("BotInput: %s" % str(QA_BOT_BENCHMARK_ENABLED))
 	print("DelayFrames: %d" % BENCHMARK_DELAY_FRAMES)
 	print("JitterFrames: %d" % BENCHMARK_JITTER_FRAMES)
 	print("DurationFrames: %d" % BENCHMARK_DURATION_FRAMES)
@@ -299,6 +302,37 @@ func _update_visuals() -> void:
 		p1_placeholder.position = player_state.position
 	if p2_placeholder:
 		p2_placeholder.position = opponent_state.position
+
+
+func _update_play_hud() -> void:
+	if play_status_label == null:
+		return
+
+	if rollback_session != null and bool(rollback_session.match_started):
+		play_status_label.text = (
+			"QA BOT BENCHMARK"
+			if QA_BOT_BENCHMARK_ENABLED
+			else "FIGHT!"
+		)
+		return
+
+	if transport == null:
+		play_status_label.text = "STARTING NETWORK..."
+		return
+
+	if ENET_HOST:
+		var remote_peer_id: int = int(transport.get("remote_peer_id"))
+		if remote_peer_id > 0:
+			play_status_label.text = "CONNECTED — PRESS SPACE TO START"
+		else:
+			play_status_label.text = "WAITING FOR OPPONENT..."
+	else:
+		var connected: bool = bool(transport.get("is_connected"))
+		play_status_label.text = (
+			"CONNECTED — WAITING FOR HOST"
+			if connected
+			else "CONNECTING TO HOST..."
+		)
 
 
 func _update_camera(delta: float) -> void:
@@ -347,7 +381,7 @@ func _update_rollback_debug_hud() -> void:
 		) % [
 			mode_text,
 			str(connected),
-			str(USE_BOT_INPUT),
+			str(QA_BOT_BENCHMARK_ENABLED),
 			BENCHMARK_DELAY_FRAMES,
 			BENCHMARK_JITTER_FRAMES,
 			str(benchmark_complete),
@@ -467,7 +501,8 @@ func _on_start_match_received() -> void:
 
 	print("[Arena] start_match received. Starting rollback session.")
 	rollback_session.start_session()
-	_start_benchmark_timer()
+	if QA_BOT_BENCHMARK_ENABLED:
+		_start_benchmark_timer()
 
 
 func _unhandled_input(event: InputEvent) -> void:
