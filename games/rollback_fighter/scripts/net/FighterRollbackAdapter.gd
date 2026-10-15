@@ -19,6 +19,7 @@ const HEAVY_BUFFER_FRAMES: int = 3
 const DEBUG_STATE_FIELDS := [
 	["p1.position.x", "p1", "x"], ["p1.position.y", "p1", "y"],
 	["p1.velocity.x", "p1", "vx"], ["p1.velocity.y", "p1", "vy"],
+	["p1.ground_velocity_x", "p1", "gvx"],
 	["p1.lean_direction", "p1", "lean"], ["p1.hp", "p1", "hp"],
 	["p1.state", "p1", "st"], ["p1.frames_left", "p1", "stf"],
 	["p1.attack_kind", "p1", "ak"], ["p1.attack_id", "p1", "aid"],
@@ -29,6 +30,7 @@ const DEBUG_STATE_FIELDS := [
 
 	["p2.position.x", "p2", "x"], ["p2.position.y", "p2", "y"],
 	["p2.velocity.x", "p2", "vx"], ["p2.velocity.y", "p2", "vy"],
+	["p2.ground_velocity_x", "p2", "gvx"],
 	["p2.lean_direction", "p2", "lean"], ["p2.hp", "p2", "hp"],
 	["p2.state", "p2", "st"], ["p2.frames_left", "p2", "stf"],
 	["p2.attack_kind", "p2", "ak"], ["p2.attack_id", "p2", "aid"],
@@ -279,6 +281,7 @@ func _snap(ps: PlayerState) -> Dictionary:
 		"y":  ps.position.y,
 		"vx": ps.vel.x,
 		"vy": ps.vel.y,
+		"gvx": ps.ground_velocity_x,
 
 		# gameplay state
 		"lean": ps.lean_direction,
@@ -314,6 +317,7 @@ func _restore(ps: PlayerState, d: Dictionary) -> void:
 
 	ps.position = Vector2(float(d.get("x", 0.0)), float(d.get("y", 0.0)))
 	ps.vel      = Vector2(float(d.get("vx", 0.0)), float(d.get("vy", 0.0)))
+	ps.ground_velocity_x = float(d.get("gvx", 0.0))
 
 	ps.lean_direction = int(d.get("lean", 0))
 	ps.hp             = int(d.get("hp", ps.hp))

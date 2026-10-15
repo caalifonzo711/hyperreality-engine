@@ -7,12 +7,17 @@ var is_touching_wall: bool = false
 var lean_direction: int = 0
 
 var vel: Vector2 = Vector2.ZERO
+var ground_velocity_x: float = 0.0
 var ground_friction: float = 900.0
-var max_knock_speed: float = 900.0
+var max_knock_speed: float = 1100.0
 
 var max_hp: int = 100
 var hp: int = 100
-var move_speed: float = 150.0
+var move_speed: float = 220.0
+
+const GROUND_ACCELERATION: float = 4800.0
+const GROUND_BRAKING: float = 6000.0
+const REVERSAL_ACCELERATION: float = 7200.0
 
 var atk_l_pressed: bool = false
 var atk_h_pressed: bool = false
@@ -168,6 +173,7 @@ func take_damage(amount: int) -> void:
 		attack_active = false
 		attack_kind = AttackKind.NONE
 		vel = Vector2.ZERO
+		ground_velocity_x = 0.0
 	else:
 		state = MoveState.HURT
 		hurt_frames = HURT_DURATION
@@ -180,14 +186,37 @@ func apply_input(input_data: Dictionary, delta: float) -> void:
 
 	if state == MoveState.DEAD:
 		vel = Vector2.ZERO
+		ground_velocity_x = 0.0
 		return
 
-	if absf(move.x) >= 0.001:
-		vel.x = move.x * move_speed
-	else:
-		vel.x = move_toward(vel.x, 0.0, ground_friction * delta)
+	var input_axis: float = clampf(move.x, -1.0, 1.0)
+	var target_speed: float = input_axis * move_speed
 
-	position += vel * delta
+	if absf(input_axis) < 0.001:
+		ground_velocity_x = move_toward(
+			ground_velocity_x,
+			0.0,
+			GROUND_BRAKING * delta
+		)
+	elif (
+		absf(ground_velocity_x) >= 0.001
+		and signf(ground_velocity_x) != signf(target_speed)
+	):
+		ground_velocity_x = move_toward(
+			ground_velocity_x,
+			target_speed,
+			REVERSAL_ACCELERATION * delta
+		)
+	else:
+		ground_velocity_x = move_toward(
+			ground_velocity_x,
+			target_speed,
+			GROUND_ACCELERATION * delta
+		)
+
+	vel.x = move_toward(vel.x, 0.0, ground_friction * delta)
+	position.x += (ground_velocity_x + vel.x) * delta
+	position.y += vel.y * delta
 	vel.x = clampf(vel.x, -max_knock_speed, max_knock_speed)
 
 	if move.x > 0.0:
@@ -335,6 +364,7 @@ func step_state_machine() -> void:
 			attack_kind = AttackKind.NONE
 			invulnerable = false
 			vel = Vector2.ZERO
+			ground_velocity_x = 0.0
 
 		_:
 			pass
