@@ -204,39 +204,20 @@ func _collect_bot_input() -> Dictionary:
 	if rollback_session != null:
 		f = int(rollback_session.current_frame)
 
-	var phase_60: int = int(f / 60) % 4
 	var mx: float = 0.0
 
-	# P1 and P2 use mirrored patterns so they approach/retreat from each other.
-	if local_player_id == 1:
-		match phase_60:
-			0:
-				mx = 1.0
-			1:
-				mx = -1.0
-			2:
-				mx = 1.0
-			_:
-				mx = 0.0
-	else:
-		match phase_60:
-			0:
-				mx = -1.0
-			1:
-				mx = 1.0
-			2:
-				mx = -1.0
-			_:
-				mx = 0.0
+	# Gate 6: approach once, settle, then P1 performs one light jab.
+	if f <= 64:
+		mx = 1.0 if local_player_id == 1 else -1.0
 
 	return {
 		"mx": mx,
 		"lean_l": false,
 		"lean_r": false,
-		"atk_l": f % 45 == 0,
-		"atk_h": f % 120 == 0,
-		"block": f % 90 < 20,
-		"dodge": f % 150 == 0,
+		"atk_l": local_player_id == 1 and f == 90,
+		"atk_h": false,
+		"block": false,
+		"dodge": false,
 	}
 
 
@@ -305,6 +286,9 @@ func _print_benchmark_results() -> void:
 	print("FirstStateDivergenceField: %s" % adapter.first_debug_field)
 	print("FirstStateDivergenceLocal: %s" % adapter.first_debug_local)
 	print("FirstStateDivergenceRemote: %s" % adapter.first_debug_remote)
+	print("P1AttackID: %d" % int(player_state.attack_id))
+	print("P1HitConfirmed: %s" % str(player_state.hit_confirmed))
+	print("P2HP: %d" % int(opponent_state.hp))
 
 	print("InputDelayFrames: %d" % BENCHMARK_INPUT_DELAY_FRAMES)
 	print("===============================================")
