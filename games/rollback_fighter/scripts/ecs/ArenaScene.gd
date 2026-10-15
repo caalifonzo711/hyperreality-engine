@@ -143,8 +143,6 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_update_wall_state()
-
 	if rollback_session and not bool(rollback_session.match_started):
 		_update_visuals()
 		_update_camera(delta)
@@ -311,22 +309,6 @@ func _print_benchmark_results() -> void:
 	print("InputDelayFrames: %d" % BENCHMARK_INPUT_DELAY_FRAMES)
 	print("===============================================")
 	print("")
-
-func _update_wall_state() -> void:
-	player_state.set_touching_wall(
-		player_state.position.x <= 0.0
-		or player_state.position.x >= 800.0
-		or player_state.position.y <= 0.0
-		or player_state.position.y >= 400.0
-	)
-
-	opponent_state.set_touching_wall(
-		opponent_state.position.x <= 0.0
-		or opponent_state.position.x >= 800.0
-		or opponent_state.position.y <= 0.0
-		or opponent_state.position.y >= 400.0
-	)
-
 
 func _update_visuals() -> void:
 	if p1_placeholder:

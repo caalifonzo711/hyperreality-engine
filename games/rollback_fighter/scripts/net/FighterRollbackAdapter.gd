@@ -68,6 +68,9 @@ func setup(_p1: PlayerState, _p2: PlayerState, _input: Node, _lean: Node, _comba
 
 
 func simulate(local: Dictionary, remote: Dictionary, dt: float) -> void:
+	_derive_wall_contact(p1_state)
+	_derive_wall_contact(p2_state)
+
 	# Update buffers first (deterministic tick-based)
 	_update_buffers(local, remote)
 
@@ -78,6 +81,18 @@ func simulate(local: Dictionary, remote: Dictionary, dt: float) -> void:
 		lean_sys.tick()
 	if combat_sys and combat_sys.has_method("tick"):
 		combat_sys.tick()
+
+
+func _derive_wall_contact(ps: PlayerState) -> void:
+	if ps == null:
+		return
+
+	ps.is_touching_wall = (
+		ps.position.x <= 0.0
+		or ps.position.x >= 800.0
+		or ps.position.y <= 0.0
+		or ps.position.y >= 400.0
+	)
 
 
 func _update_buffers(local: Dictionary, remote: Dictionary) -> void:
