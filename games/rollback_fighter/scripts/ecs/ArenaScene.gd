@@ -26,6 +26,8 @@ const ENET_PORT := 7777
 # -------------------------------------------------
 const USE_BOT_INPUT := true
 const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
+const CHECKSUM_SETTLEMENT_PASSES := 2
+const CHECKSUM_SETTLEMENT_DRAIN_FRAMES := 30
 
 # Set these on BOTH computers before each test:
 # 0  = baseline LAN
@@ -58,6 +60,8 @@ var local_player_id: int = 1
 var benchmark_running: bool = false
 var benchmark_complete: bool = false
 var benchmark_start_frame: int = 0
+var benchmark_settle_tick: int = -1
+var benchmark_resend_ticks: int = 0
 
 
 @onready var cam: Camera2D = get_node_or_null("Camera2D")
@@ -161,6 +165,15 @@ func _physics_process(delta: float) -> void:
 				_update_rollback_debug_hud()
 				return
 
+		if benchmark_settle_tick >= 0:
+			_tick_benchmark_settlement()
+			_update_visuals()
+			_update_camera(delta)
+			_update_health_tint()
+			_update_combat_debug_hud()
+			_update_rollback_debug_hud()
+			return
+
 		if benchmark_complete:
 			_update_visuals()
 			_update_camera(delta)
@@ -244,6 +257,8 @@ func _start_benchmark_timer() -> void:
 	benchmark_running = true
 	benchmark_complete = false
 	benchmark_start_frame = int(rollback_session.current_frame) if rollback_session != null else 0
+	benchmark_settle_tick = -1
+	benchmark_resend_ticks = 0
 
 	print("[Benchmark] START | player_id=%d delay=%d jitter=%d bot=%s duration=%d" % [
 		local_player_id,
@@ -262,8 +277,32 @@ func _check_benchmark_complete() -> void:
 
 	if elapsed_frames >= BENCHMARK_DURATION_FRAMES:
 		benchmark_running = false
-		benchmark_complete = true
-		_print_benchmark_results()
+		benchmark_resend_ticks = (
+			rollback_session.begin_checksum_resend()
+			* CHECKSUM_SETTLEMENT_PASSES
+		)
+		benchmark_settle_tick = 0
+
+
+func _tick_benchmark_settlement() -> void:
+	if rollback_session == null:
+		return
+
+	if benchmark_settle_tick < benchmark_resend_ticks:
+		rollback_session.resend_next_retained_checksum()
+		benchmark_settle_tick += 1
+		return
+
+	if benchmark_settle_tick < (
+		benchmark_resend_ticks
+		+ CHECKSUM_SETTLEMENT_DRAIN_FRAMES
+	):
+		benchmark_settle_tick += 1
+		return
+
+	benchmark_settle_tick = -1
+	benchmark_complete = true
+	_print_benchmark_results()
 
 
 func _frame_gap() -> int:
