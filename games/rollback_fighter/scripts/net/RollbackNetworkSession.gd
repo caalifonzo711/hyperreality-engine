@@ -39,6 +39,8 @@ var local_checksums: Dictionary = {}
 var remote_checksums: Dictionary = {}
 var local_checksum_revisions: Dictionary = {}
 var remote_checksum_revisions: Dictionary = {}
+var pending_checksum_acks: Dictionary = {}
+var _checksum_resend_cursor: int = 0
 
 # Comparison result stored by frame.
 # true  = matching
@@ -105,6 +107,8 @@ func reset_session() -> void:
 	remote_checksums.clear()
 	local_checksum_revisions.clear()
 	remote_checksum_revisions.clear()
+	pending_checksum_acks.clear()
+	_checksum_resend_cursor = 0
 	checksum_comparison_results.clear()
 
 	checksum_frames_compared = 0
@@ -171,6 +175,21 @@ func _send_checksum_packet(frame: int, checksum: int, revision: int) -> void:
 	})
 
 
+func _send_checksum_ack(frame: int, revision: int) -> void:
+	if transport == null:
+		return
+
+	if not transport.has_method("send_packet"):
+		return
+
+	transport.send_packet({
+		"type": "checksum_ack",
+		"frame": frame,
+		"player_id": player_id,
+		"revision": revision,
+	})
+
+
 func _record_local_checksum(frame: int, send_to_peer: bool = true) -> void:
 	var snapshot: Dictionary = adapter.capture()
 	local_checksum = _compute_checksum(snapshot)
@@ -185,6 +204,7 @@ func _record_local_checksum(frame: int, send_to_peer: bool = true) -> void:
 	_try_compare_checksum(frame, true, snapshot)
 
 	if send_to_peer:
+		pending_checksum_acks[frame] = revision
 		_send_checksum_packet(frame, local_checksum, revision)
 
 
@@ -287,6 +307,8 @@ func _handle_checksum_packet(packet: Dictionary) -> void:
 
 	var checksum: int = int(packet.get("checksum", 0))
 	var revision: int = int(packet.get("revision", 0))
+	_send_checksum_ack(frame, revision)
+
 	var highest_revision: int = int(
 		remote_checksum_revisions.get(frame, -1)
 	)
@@ -301,6 +323,62 @@ func _handle_checksum_packet(packet: Dictionary) -> void:
 	# This may do nothing if the real input/state for
 	# the matching frame is not ready yet.
 	_try_compare_checksum(frame)
+
+
+func _handle_checksum_ack(packet: Dictionary) -> void:
+	if int(packet.get("player_id", -1)) == player_id:
+		return
+
+	var frame: int = int(packet.get("frame", -1))
+	var revision: int = int(packet.get("revision", -1))
+
+	if frame < 0 or revision < 0:
+		return
+
+	if not pending_checksum_acks.has(frame):
+		return
+
+	if not local_checksum_revisions.has(frame):
+		return
+
+	if int(pending_checksum_acks[frame]) != revision:
+		return
+
+	if int(local_checksum_revisions[frame]) != revision:
+		return
+
+	pending_checksum_acks.erase(frame)
+
+
+func _resend_one_pending_checksum() -> void:
+	if pending_checksum_acks.is_empty():
+		return
+
+	var frames: Array = pending_checksum_acks.keys()
+	frames.sort()
+
+	if _checksum_resend_cursor >= frames.size():
+		_checksum_resend_cursor = 0
+
+	var frame: int = int(frames[_checksum_resend_cursor])
+	_checksum_resend_cursor += 1
+
+	if not local_checksums.has(frame):
+		return
+
+	if not local_checksum_revisions.has(frame):
+		return
+
+	var revision: int = int(pending_checksum_acks[frame])
+
+	if int(local_checksum_revisions[frame]) != revision:
+		return
+
+	_send_checksum_packet(
+		frame,
+		int(local_checksums[frame]),
+		revision
+	)
 
 
 # Single debug send path. Player 1 sends the probe; player 2 sends the reply.
@@ -408,6 +486,8 @@ func tick(local_input: Dictionary) -> void:
 	if transport and transport.has_method("tick"):
 		transport.tick()
 
+	_resend_one_pending_checksum()
+
 	var input_frame: int = (
 		current_frame
 		+ max(0, input_delay_frames)
@@ -476,6 +556,9 @@ func tick(local_input: Dictionary) -> void:
 	if remote_checksum_revisions.has(old_frame):
 		remote_checksum_revisions.erase(old_frame)
 
+	if pending_checksum_acks.has(old_frame):
+		pending_checksum_acks.erase(old_frame)
+
 	# Keep checksum_comparison_results for the whole
 	# benchmark so final stats stay intact.
 
@@ -526,6 +609,10 @@ func _on_packet_received(packet: Dictionary) -> void:
 
 	if packet_type == "checksum":
 		_handle_checksum_packet(packet)
+		return
+
+	if packet_type == "checksum_ack":
+		_handle_checksum_ack(packet)
 		return
 
 	if packet_type == "first_state_debug":
