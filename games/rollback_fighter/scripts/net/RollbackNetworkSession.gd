@@ -39,7 +39,6 @@ var local_checksums: Dictionary = {}
 var remote_checksums: Dictionary = {}
 var local_checksum_revisions: Dictionary = {}
 var remote_checksum_revisions: Dictionary = {}
-var _checksum_resend_cursor: int = 0
 
 # Comparison result stored by frame.
 # true  = matching
@@ -106,7 +105,6 @@ func reset_session() -> void:
 	remote_checksums.clear()
 	local_checksum_revisions.clear()
 	remote_checksum_revisions.clear()
-	_checksum_resend_cursor = 0
 	checksum_comparison_results.clear()
 
 	checksum_frames_compared = 0
@@ -171,32 +169,6 @@ func _send_checksum_packet(frame: int, checksum: int, revision: int) -> void:
 		"checksum": checksum,
 		"revision": revision,
 	})
-
-
-func begin_checksum_resend() -> int:
-	_checksum_resend_cursor = 0
-	return local_checksums.size()
-
-
-func resend_next_retained_checksum() -> bool:
-	var frames: Array = local_checksums.keys()
-	frames.sort()
-
-	if frames.is_empty():
-		return false
-
-	if _checksum_resend_cursor >= frames.size():
-		_checksum_resend_cursor = 0
-
-	var frame: int = int(frames[_checksum_resend_cursor])
-	_checksum_resend_cursor += 1
-
-	_send_checksum_packet(
-		frame,
-		int(local_checksums[frame]),
-		int(local_checksum_revisions.get(frame, 0))
-	)
-	return true
 
 
 func _record_local_checksum(frame: int, send_to_peer: bool = true) -> void:
