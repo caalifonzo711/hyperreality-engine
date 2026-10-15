@@ -34,7 +34,7 @@ const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 # 12 = ~200ms
 const BENCHMARK_DELAY_FRAMES := 0
 const BENCHMARK_JITTER_FRAMES := 0
-const BENCHMARK_INPUT_DELAY_FRAMES := 0 #for tuning test 3, 4, 6
+const BENCHMARK_INPUT_DELAY_FRAMES := 3 #for tuning test 3, 4, 6
 
 @onready var player_state := PlayerState.new()
 @onready var opponent_state := PlayerState.new()
