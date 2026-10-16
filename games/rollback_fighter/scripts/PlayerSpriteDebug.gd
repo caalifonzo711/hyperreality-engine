@@ -42,6 +42,44 @@ class_name PlayerSpriteDebug
 
 @export var debug_label: String = "P?"
 
+# Presentation-only metadata. Each feet anchor is expressed in source-image
+# pixels. The scale normalizes the visible fighter body to roughly the same
+# 48-pixel gameplay height without modifying the source PNGs.
+const FRAME_PRESENTATION := {
+	"res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png": {
+		"feet": Vector2(288.0, 416.0),
+		"scale": 0.135,
+	},
+	"res://games/rollback_fighter/characters/example_fighter/sprites/idle_1.png": {
+		"feet": Vector2(288.0, 416.0),
+		"scale": 0.135,
+	},
+	"res://games/rollback_fighter/characters/example_fighter/sprites/jab_0.png": {
+		"feet": Vector2(646.0, 589.0),
+		"scale": 0.108,
+	},
+	"res://games/rollback_fighter/characters/example_fighter/sprites/jab_1.png": {
+		"feet": Vector2(647.0, 589.0),
+		"scale": 0.108,
+	},
+	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_block_0.png": {
+		"feet": Vector2(279.0, 416.0),
+		"scale": 0.135,
+	},
+	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_jump_1.png": {
+		"feet": Vector2(254.0, 348.0),
+		"scale": 0.172,
+	},
+	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_hit_0.png": {
+		"feet": Vector2(284.0, 402.0),
+		"scale": 0.138,
+	},
+	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_dead_0.png": {
+		"feet": Vector2(252.0, 471.0),
+		"scale": 0.118,
+	},
+}
+
 var _ps: Node = null
 
 # Modes: idle / jab / heavy / block / dodge / hit / dead
@@ -70,6 +108,8 @@ func get_debug_visual_state() -> Dictionary:
 		"mode": _mode,
 		"frame": _frame,
 		"texture_size": texture_size,
+		"offset": offset,
+		"scale": scale,
 	}
 
 
@@ -82,32 +122,51 @@ func _process(delta: float) -> void:
 	if wanted_mode != _mode:
 		_set_mode(wanted_mode)
 
-	_t += delta
+	if _mode == "idle":
+		_advance_idle_animation(delta)
+	else:
+		_frame = _get_authoritative_visual_frame()
 
-	var fps: float = _get_fps_for_mode(_mode)
-	var frames: Array[String] = _get_frames_for_mode(_mode)
-	var frame_time: float = 1.0 / maxf(fps, 0.001)
-
-	while _t >= frame_time:
-		_t -= frame_time
-		_frame += 1
-
-		var should_loop: bool = (_mode == "idle" or _mode == "block")
-
-		if should_loop:
-			if frames.size() > 0:
-				_frame = _frame % frames.size()
-		else:
-			# hold on last frame until state changes
-			if _frame >= frames.size():
-				_frame = maxi(frames.size() - 1, 0)
+	# The source artwork faces left, so positive gameplay facing must flip it.
+	var facing_val: Variant = _ps.get("facing")
+	if typeof(facing_val) == TYPE_INT:
+		flip_h = int(facing_val) > 0
 
 	_apply_frame()
 
-	# Optional facing flip if PlayerState has facing
-	var facing_val: Variant = _ps.get("facing")
-	if typeof(facing_val) == TYPE_INT:
-		flip_h = int(facing_val) < 0
+
+func _advance_idle_animation(delta: float) -> void:
+	_t += delta
+
+	var frames: Array[String] = _get_frames_for_mode("idle")
+	if frames.is_empty():
+		_frame = 0
+		return
+
+	var frame_time: float = 1.0 / maxf(idle_fps, 0.001)
+	while _t >= frame_time:
+		_t -= frame_time
+		_frame = (_frame + 1) % frames.size()
+
+
+func _get_authoritative_visual_frame() -> int:
+	if _ps == null:
+		return 0
+
+	if _mode != "jab" and _mode != "heavy":
+		return 0
+
+	var state_val: Variant = _ps.get("state")
+	if typeof(state_val) != TYPE_INT:
+		return 0
+
+	# Startup and recovery use pose 0. The extended pose is shown only while
+	# the deterministic simulation says the attack is active.
+	if int(state_val) == PlayerState.MoveState.ACTIVE:
+		var frames: Array[String] = _get_frames_for_mode(_mode)
+		return mini(1, maxi(frames.size() - 1, 0))
+
+	return 0
 
 
 func _choose_mode() -> String:
@@ -226,7 +285,30 @@ func _apply_frame() -> void:
 		var tex: Texture2D = load(path)
 		if tex != null:
 			texture = tex
+			_apply_presentation(path, tex)
 	else:
 		if not _warned_missing.has(path):
 			_warned_missing[path] = true
 			push_warning("[PlayerSpriteDebug %s] missing texture: %s" % [debug_label, path])
+
+
+func _apply_presentation(path: String, tex: Texture2D) -> void:
+	centered = true
+
+	var texture_size: Vector2 = tex.get_size()
+	var presentation: Dictionary = FRAME_PRESENTATION.get(path, {})
+	var feet: Vector2 = presentation.get(
+		"feet",
+		texture_size * 0.5
+	)
+	var visual_scale: float = float(presentation.get("scale", 1.0))
+
+	# With a centered Sprite2D, source pixel P is drawn at P - size/2.
+	# Offset the authored feet pixel to the parent origin. Sprite2D flips the
+	# texture inside its draw rectangle, so the horizontal offset must mirror
+	# with the artwork to keep the same feet point anchored in both facings.
+	var anchor_offset: Vector2 = texture_size * 0.5 - feet
+	if flip_h:
+		anchor_offset.x = -anchor_offset.x
+	offset = anchor_offset
+	scale = Vector2.ONE * visual_scale

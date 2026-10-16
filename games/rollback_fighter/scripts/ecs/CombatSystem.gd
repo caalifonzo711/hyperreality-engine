@@ -466,6 +466,62 @@ func _get_default_body_hurtbox(
 
 
 # =================================================
+# Read-only runtime presentation queries
+#
+# These intentionally reuse the same profile lookup and world-box conversion
+# as collision. They do not participate in combat resolution.
+# =================================================
+
+func get_debug_hurtbox_rect(fighter: PlayerState) -> Rect2:
+	if fighter == null:
+		return Rect2()
+
+	var box: Dictionary = _get_default_body_hurtbox(fighter)
+	return Rect2(
+		float(box.get("x", 0)),
+		float(box.get("y", 0)),
+		float(box.get("w", 0)),
+		float(box.get("h", 0))
+	)
+
+
+func get_debug_active_light_hitbox_rects(
+	fighter: PlayerState
+) -> Array[Rect2]:
+	var world_rects: Array[Rect2] = []
+
+	if fighter == null or not _jab_loaded:
+		return world_rects
+
+	if (
+		not fighter.attack_active
+		or fighter.attack_kind != PlayerState.AttackKind.LIGHT
+	):
+		return world_rects
+
+	var active_frame: int = _get_active_frame(fighter)
+	if active_frame < 0:
+		return world_rects
+
+	for local_box_variant in _jab_profile.get_hitboxes(active_frame):
+		if not (local_box_variant is Dictionary):
+			continue
+
+		var world_box: Dictionary = _make_world_box(
+			fighter,
+			local_box_variant
+		)
+		world_rects.append(Rect2(
+			float(world_box.get("x", 0)),
+			float(world_box.get("y", 0)),
+			float(world_box.get("w", 0)),
+			float(world_box.get("h", 0))
+		))
+
+	return world_rects
+
+
+# =================================================
 # Integer rectangle overlap
 # =================================================
 

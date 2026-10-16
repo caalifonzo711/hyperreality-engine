@@ -107,6 +107,7 @@ shape = SubResource("RectangleShape2D_ycm42")
 position = Vector2(50, 1)
 
 [node name="ColorRect" type="ColorRect" parent="PlayerPlaceholder"]
+visible = false
 offset_right = 40.0
 offset_bottom = 40.0
 color = Color(1, 0, 0, 0.329412)

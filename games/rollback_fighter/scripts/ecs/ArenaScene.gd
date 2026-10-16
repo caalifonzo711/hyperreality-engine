@@ -88,7 +88,15 @@ var _last_render_physics_ticks: int = 0
 
 const LEAN_OFFSET := 14.0
 const LEAN_LERP_SPEED := 10.0
+const HURTBOX_FILL_COLOR := Color(0.15, 0.45, 1.0, 0.22)
+const HURTBOX_LINE_COLOR := Color(0.25, 0.65, 1.0, 0.95)
+const HITBOX_FILL_COLOR := Color(1.0, 0.1, 0.1, 0.28)
+const HITBOX_LINE_COLOR := Color(1.0, 0.2, 0.2, 1.0)
+
+@export var show_runtime_combat_boxes: bool = true
+
 var _lean_vis_x: float = 0.0
+var _combat_box_overlay: Node2D = null
 
 
 func _ready() -> void:
@@ -99,6 +107,12 @@ func _ready() -> void:
 	add_child(input_system)
 	add_child(lean_system)
 	add_child(combat_system)
+
+	_combat_box_overlay = Node2D.new()
+	_combat_box_overlay.name = "RuntimeCombatBoxOverlay"
+	_combat_box_overlay.z_index = 100
+	add_child(_combat_box_overlay)
+	_combat_box_overlay.draw.connect(_draw_runtime_combat_boxes)
 
 	player_state.position = Vector2(200, 250)
 	opponent_state.position = Vector2(600, 250)
@@ -551,6 +565,25 @@ func _update_visuals() -> void:
 		p1_placeholder.position = player_state.position
 	if p2_placeholder:
 		p2_placeholder.position = opponent_state.position
+	if _combat_box_overlay:
+		_combat_box_overlay.queue_redraw()
+
+
+func _draw_runtime_combat_boxes() -> void:
+	if not show_runtime_combat_boxes or _combat_box_overlay == null:
+		return
+
+	for fighter: PlayerState in [player_state, opponent_state]:
+		var hurtbox: Rect2 = combat_system.get_debug_hurtbox_rect(fighter)
+		_combat_box_overlay.draw_rect(hurtbox, HURTBOX_FILL_COLOR, true)
+		_combat_box_overlay.draw_rect(hurtbox, HURTBOX_LINE_COLOR, false, 1.5)
+
+		var hitboxes: Array[Rect2] = (
+			combat_system.get_debug_active_light_hitbox_rects(fighter)
+		)
+		for hitbox: Rect2 in hitboxes:
+			_combat_box_overlay.draw_rect(hitbox, HITBOX_FILL_COLOR, true)
+			_combat_box_overlay.draw_rect(hitbox, HITBOX_LINE_COLOR, false, 1.5)
 
 
 func _update_play_hud() -> void:
