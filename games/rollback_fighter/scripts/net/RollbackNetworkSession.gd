@@ -3,6 +3,7 @@ class_name RollbackNetworkSession
 
 const PHYS_DT := 1.0 / 60.0
 const MAX_ROLLBACK_FRAMES := 60
+const MAX_PREDICTION_FRAMES := 8
 
 var player_id: int = 1
 var input_delay_frames: int = 0
@@ -19,6 +20,9 @@ var max_rollback_depth: int = 0
 var prediction_misses: int = 0
 var packets_received: int = 0
 var last_remote_frame: int = -1
+var max_prediction_lead: int = 0
+var lead_stalled: bool = false
+var lead_stall_ticks: int = 0
 var match_started: bool = false
 
 var adapter: FighterRollbackAdapter = null
@@ -97,6 +101,9 @@ func reset_session() -> void:
 	prediction_misses = 0
 	packets_received = 0
 	last_remote_frame = -1
+	max_prediction_lead = 0
+	lead_stalled = false
+	lead_stall_ticks = 0
 
 	local_checksum = 0
 	remote_checksum = 0
@@ -129,6 +136,17 @@ func frame_gap() -> int:
 		return 0
 
 	return current_frame - last_remote_frame
+
+
+func get_prediction_lead() -> int:
+	return maxi(
+		current_frame - (last_remote_frame + 1),
+		0
+	)
+
+
+func get_prediction_lead_limit() -> int:
+	return MAX_PREDICTION_FRAMES
 
 
 func _empty_input() -> Dictionary:
@@ -431,7 +449,12 @@ func tick(local_input: Dictionary) -> void:
 		+ max(0, input_delay_frames)
 	)
 
-	local_inputs[input_frame] = local_input.duplicate(true)
+	if not local_inputs.has(input_frame):
+		local_inputs[input_frame] = local_input.duplicate(true)
+
+	var latched_local_input: Dictionary = (
+		local_inputs[input_frame]
+	)
 
 	# =================================================
 	# Send local input
@@ -442,8 +465,22 @@ func tick(local_input: Dictionary) -> void:
 			"type": "input",
 			"frame": input_frame,
 			"player_id": player_id,
-			"input": local_input.duplicate(true),
+			"input": latched_local_input.duplicate(true),
 		})
+
+	var prediction_lead: int = get_prediction_lead()
+	max_prediction_lead = maxi(
+		max_prediction_lead,
+		prediction_lead
+	)
+
+	lead_stalled = (
+		prediction_lead >= MAX_PREDICTION_FRAMES
+	)
+
+	if lead_stalled:
+		lead_stall_ticks += 1
+		return
 
 	var delayed_local_input: Dictionary = local_inputs.get(
 		current_frame,
@@ -566,7 +603,7 @@ func _on_packet_received(packet: Dictionary) -> void:
 		return
 
 	packets_received += 1
-	last_remote_frame = frame
+	last_remote_frame = maxi(last_remote_frame, frame)
 
 	remote_inputs[frame] = input_data.duplicate(true)
 	_advance_remote_confirmed_through()

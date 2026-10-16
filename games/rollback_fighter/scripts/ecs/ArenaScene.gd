@@ -34,7 +34,7 @@ const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 # 12 = ~200ms
 const BENCHMARK_DELAY_FRAMES := 0
 const BENCHMARK_JITTER_FRAMES := 0
-const BENCHMARK_INPUT_DELAY_FRAMES := 3 #for tuning test 3, 4, 6
+const BENCHMARK_INPUT_DELAY_FRAMES := 0 #for tuning test 3, 4, 6
 
 @onready var player_state := PlayerState.new()
 @onready var opponent_state := PlayerState.new()
@@ -277,6 +277,11 @@ func _print_benchmark_results() -> void:
 	print("LastRemoteFrame: %d" % int(rollback_session.last_remote_frame))
 	print("LocalFrame: %d" % int(rollback_session.current_frame))
 	print("FrameGap: %d" % _frame_gap())
+	print("PredictionLead: %d" % int(rollback_session.get_prediction_lead()))
+	print("MaxPredictionLead: %d" % int(rollback_session.max_prediction_lead))
+	print("LeadLimit: %d" % int(rollback_session.get_prediction_lead_limit()))
+	print("LeadStalled: %s" % str(rollback_session.lead_stalled))
+	print("LeadStallTicks: %d" % int(rollback_session.lead_stall_ticks))
 	print("RollbackCount: %d" % int(rollback_session.rollback_count))
 	print("MaxRollbackDepth: %d" % int(rollback_session.max_rollback_depth))
 	print("PredictionMisses: %d" % int(rollback_session.prediction_misses))
@@ -357,10 +362,11 @@ func _update_rollback_debug_hud() -> void:
 		return
 
 	if debug_tick_label:
-		debug_tick_label.text = "Frame: %d | Player ID: %d | Gap: %d" % [
+		debug_tick_label.text = "Frame: %d | Player ID: %d | Gap: %d | Lead: %d" % [
 			int(rollback_session.current_frame),
 			local_player_id,
-			_frame_gap()
+			_frame_gap(),
+			int(rollback_session.get_prediction_lead())
 		]
 
 	var mode_text := "ENet"
@@ -376,6 +382,8 @@ func _update_rollback_debug_hud() -> void:
 			"Mode=%s | Connected=%s | Bot=%s\n" +
 			"Delay=%d | Jitter=%d | BenchmarkDone=%s\n" +
 			"Packets=%d | LastRemoteFrame=%d | Gap=%d\n" +
+			"PredictionLead=%d | Max=%d | Limit=%d\n" +
+			"LeadStalled=%s | StallTicks=%d\n" +
 			"Rollback count=%d | Max depth=%d | Misses=%d\n" +
 			"Checksum compared=%d | Mismatches=%d | First=%d"
 		) % [
@@ -388,6 +396,11 @@ func _update_rollback_debug_hud() -> void:
 			int(rollback_session.packets_received),
 			int(rollback_session.last_remote_frame),
 			_frame_gap(),
+			int(rollback_session.get_prediction_lead()),
+			int(rollback_session.max_prediction_lead),
+			int(rollback_session.get_prediction_lead_limit()),
+			str(rollback_session.lead_stalled),
+			int(rollback_session.lead_stall_ticks),
 			int(rollback_session.rollback_count),
 			int(rollback_session.max_rollback_depth),
 			int(rollback_session.prediction_misses),
