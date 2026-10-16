@@ -4,6 +4,7 @@ class_name RollbackNetworkSession
 const PHYS_DT := 1.0 / 60.0
 const MAX_ROLLBACK_FRAMES := 60
 const MAX_PREDICTION_FRAMES := 8
+const INPUT_REDUNDANCY_FRAMES := 3
 
 var player_id: int = 1
 var input_delay_frames: int = 0
@@ -23,6 +24,13 @@ var last_remote_frame: int = -1
 var max_prediction_lead: int = 0
 var lead_stalled: bool = false
 var lead_stall_ticks: int = 0
+var redundant_frames_received: int = 0
+var recovered_missing_frames: int = 0
+var duplicate_input_frames: int = 0
+var history_exhausted: bool = false
+var history_exhaustion_frame: int = -1
+var input_mutation_error: bool = false
+var input_mutation_error_frame: int = -1
 var match_started: bool = false
 
 var adapter: FighterRollbackAdapter = null
@@ -104,6 +112,13 @@ func reset_session() -> void:
 	max_prediction_lead = 0
 	lead_stalled = false
 	lead_stall_ticks = 0
+	redundant_frames_received = 0
+	recovered_missing_frames = 0
+	duplicate_input_frames = 0
+	history_exhausted = false
+	history_exhaustion_frame = -1
+	input_mutation_error = false
+	input_mutation_error_frame = -1
 
 	local_checksum = 0
 	remote_checksum = 0
@@ -149,6 +164,33 @@ func get_prediction_lead_limit() -> int:
 	return MAX_PREDICTION_FRAMES
 
 
+func get_confirmation_lag() -> int:
+	return maxi(
+		(current_frame - 1) - remote_confirmed_through,
+		0
+	)
+
+
+func get_earliest_missing_remote_frame() -> int:
+	var frame: int = remote_confirmed_through + 1
+
+	if frame <= last_remote_frame and not remote_inputs.has(frame):
+		return frame
+
+	return -1
+
+
+func get_oldest_retained_snapshot() -> int:
+	var oldest: int = -1
+
+	for frame_value: Variant in snapshots.keys():
+		var frame: int = int(frame_value)
+		if oldest < 0 or frame < oldest:
+			oldest = frame
+
+	return oldest
+
+
 func _empty_input() -> Dictionary:
 	return {
 		"mx": 0.0,
@@ -159,6 +201,81 @@ func _empty_input() -> Dictionary:
 		"block": false,
 		"dodge": false,
 	}
+
+
+func _build_input_history(input_frame: int) -> Array[Dictionary]:
+	var history: Array[Dictionary] = []
+
+	for offset: int in range(1, INPUT_REDUNDANCY_FRAMES + 1):
+		var history_frame: int = input_frame - offset
+
+		if history_frame < 0:
+			continue
+
+		if not local_inputs.has(history_frame):
+			continue
+
+		history.append({
+			"frame": history_frame,
+			"input": local_inputs[history_frame].duplicate(true),
+		})
+
+	return history
+
+
+func _erase_history_frame(frame: int) -> void:
+	if snapshots.has(frame):
+		snapshots.erase(frame)
+
+	if local_inputs.has(frame):
+		local_inputs.erase(frame)
+
+	if remote_inputs.has(frame):
+		remote_inputs.erase(frame)
+
+	if predicted_remote_inputs.has(frame):
+		predicted_remote_inputs.erase(frame)
+
+	if local_checksums.has(frame):
+		local_checksums.erase(frame)
+
+	if remote_checksums.has(frame):
+		remote_checksums.erase(frame)
+
+	# Keep checksum_comparison_results for the whole
+	# benchmark so final stats stay intact.
+
+
+func _enter_history_exhaustion(frame: int) -> void:
+	if history_exhausted:
+		return
+
+	history_exhausted = true
+	history_exhaustion_frame = frame
+	push_error(
+		"[Rollback] HISTORY EXHAUSTED frame=%d current_frame=%d remote_confirmed_through=%d last_remote_frame=%d max_history=%d"
+		% [
+			frame,
+			current_frame,
+			remote_confirmed_through,
+			last_remote_frame,
+			MAX_ROLLBACK_FRAMES,
+		]
+	)
+
+
+func _cleanup_old_history() -> bool:
+	var old_frame: int = current_frame - MAX_ROLLBACK_FRAMES
+
+	if old_frame < 0:
+		return true
+
+	if old_frame > remote_confirmed_through:
+		_enter_history_exhaustion(old_frame)
+		return false
+
+	_erase_history_frame(old_frame)
+	return true
 
 
 # =================================================
@@ -466,6 +583,7 @@ func tick(local_input: Dictionary) -> void:
 			"frame": input_frame,
 			"player_id": player_id,
 			"input": latched_local_input.duplicate(true),
+			"history": _build_input_history(input_frame),
 		})
 
 	var prediction_lead: int = get_prediction_lead()
@@ -480,6 +598,12 @@ func tick(local_input: Dictionary) -> void:
 
 	if lead_stalled:
 		lead_stall_ticks += 1
+		return
+
+	if history_exhausted:
+		return
+
+	if not _cleanup_old_history():
 		return
 
 	var delayed_local_input: Dictionary = local_inputs.get(
@@ -497,36 +621,6 @@ func tick(local_input: Dictionary) -> void:
 
 	# Save PRE-SIMULATION snapshot.
 	snapshots[current_frame] = adapter.capture()
-
-	# =================================================
-	# Cleanup old rollback history
-	# =================================================
-
-	var old_frame: int = (
-		current_frame
-		- MAX_ROLLBACK_FRAMES
-	)
-
-	if snapshots.has(old_frame):
-		snapshots.erase(old_frame)
-
-	if local_inputs.has(old_frame):
-		local_inputs.erase(old_frame)
-
-	if remote_inputs.has(old_frame):
-		remote_inputs.erase(old_frame)
-
-	if predicted_remote_inputs.has(old_frame):
-		predicted_remote_inputs.erase(old_frame)
-
-	if local_checksums.has(old_frame):
-		local_checksums.erase(old_frame)
-
-	if remote_checksums.has(old_frame):
-		remote_checksums.erase(old_frame)
-
-	# Keep checksum_comparison_results for the whole
-	# benchmark so final stats stay intact.
 
 	# =================================================
 	# Simulate current frame
@@ -562,6 +656,97 @@ func _predict_remote_input(frame: int) -> Dictionary:
 # Network receive
 # =================================================
 
+func _is_valid_input_data(input_data: Dictionary) -> bool:
+	if not input_data.has("mx"):
+		return false
+
+	var mx_type: int = typeof(input_data["mx"])
+	if mx_type != TYPE_FLOAT and mx_type != TYPE_INT:
+		return false
+
+	for field: String in [
+		"lean_l",
+		"lean_r",
+		"atk_l",
+		"atk_h",
+		"block",
+		"dodge",
+	]:
+		if not input_data.has(field):
+			return false
+
+		if typeof(input_data[field]) != TYPE_BOOL:
+			return false
+
+	return true
+
+
+func _inputs_equal(
+	a: Dictionary,
+	b: Dictionary
+) -> bool:
+	return (
+		float(a.get("mx", 0.0)) == float(b.get("mx", 0.0))
+		and bool(a.get("lean_l", false)) == bool(b.get("lean_l", false))
+		and bool(a.get("lean_r", false)) == bool(b.get("lean_r", false))
+		and bool(a.get("atk_l", false)) == bool(b.get("atk_l", false))
+		and bool(a.get("atk_h", false)) == bool(b.get("atk_h", false))
+		and bool(a.get("block", false)) == bool(b.get("block", false))
+		and bool(a.get("dodge", false)) == bool(b.get("dodge", false))
+	)
+
+
+func _append_valid_input_record(
+	records: Array[Dictionary],
+	frame_value: Variant,
+	input_value: Variant,
+	is_redundant: bool
+) -> void:
+	if typeof(frame_value) != TYPE_INT:
+		push_error("[Rollback] Invalid input frame type in packet.")
+		return
+
+	var frame: int = int(frame_value)
+	if frame < 0:
+		push_error("[Rollback] Invalid negative input frame in packet.")
+		return
+
+	if not input_value is Dictionary:
+		push_error("[Rollback] Invalid input payload type for frame %d." % frame)
+		return
+
+	var input_data: Dictionary = input_value
+	if not _is_valid_input_data(input_data):
+		push_error("[Rollback] Invalid input payload for frame %d." % frame)
+		return
+
+	records.append({
+		"frame": frame,
+		"input": input_data.duplicate(true),
+		"redundant": is_redundant,
+	})
+
+
+func _input_record_less(
+	a: Dictionary,
+	b: Dictionary
+) -> bool:
+	return int(a.get("frame", -1)) < int(b.get("frame", -1))
+
+
+func _report_input_mutation(frame: int) -> void:
+	if input_mutation_error:
+		return
+
+	input_mutation_error = true
+	input_mutation_error_frame = frame
+
+	push_error(
+		"[Rollback] INPUT MUTATION player=%d frame=%d"
+		% [3 - player_id, frame]
+	)
+
+
 func _on_packet_received(packet: Dictionary) -> void:
 	var packet_type: String = str(
 		packet.get("type", "")
@@ -590,22 +775,80 @@ func _on_packet_received(packet: Dictionary) -> void:
 	if int(packet.get("player_id", -1)) == player_id:
 		return
 
-	var frame: int = int(
-		packet.get("frame", -1)
+	var records: Array[Dictionary] = []
+	_append_valid_input_record(
+		records,
+		packet.get("frame", null),
+		packet.get("input", null),
+		false
 	)
 
-	var input_data: Dictionary = packet.get(
-		"input",
-		{}
-	)
+	var history_value: Variant = packet.get("history", [])
+	if history_value is Array:
+		for history_record_value: Variant in history_value:
+			if not history_record_value is Dictionary:
+				push_error("[Rollback] Invalid input history record type.")
+				continue
 
-	if frame < 0:
+			var history_record: Dictionary = history_record_value
+			_append_valid_input_record(
+				records,
+				history_record.get("frame", null),
+				history_record.get("input", null),
+				true
+			)
+	else:
+		push_error("[Rollback] Invalid input history array.")
+
+	if records.is_empty():
 		return
 
 	packets_received += 1
-	last_remote_frame = maxi(last_remote_frame, frame)
+	records.sort_custom(_input_record_less)
 
-	remote_inputs[frame] = input_data.duplicate(true)
+	var newest_valid_frame: int = -1
+	var newly_inserted: Array[Dictionary] = []
+
+	for record: Dictionary in records:
+		var frame: int = int(record.get("frame", -1))
+		var input_data: Dictionary = record.get("input", {})
+		var is_redundant: bool = bool(
+			record.get("redundant", false)
+		)
+
+		newest_valid_frame = maxi(newest_valid_frame, frame)
+
+		if is_redundant:
+			redundant_frames_received += 1
+
+		if remote_inputs.has(frame):
+			var existing_input: Dictionary = remote_inputs[frame]
+
+			if _inputs_equal(existing_input, input_data):
+				duplicate_input_frames += 1
+			else:
+				_report_input_mutation(frame)
+
+			continue
+
+		if frame <= remote_confirmed_through:
+			duplicate_input_frames += 1
+			continue
+
+		remote_inputs[frame] = input_data.duplicate(true)
+		newly_inserted.append({
+			"frame": frame,
+			"input": input_data.duplicate(true),
+		})
+
+		if is_redundant:
+			recovered_missing_frames += 1
+
+	last_remote_frame = maxi(
+		last_remote_frame,
+		newest_valid_frame
+	)
+
 	_advance_remote_confirmed_through()
 
 	# =================================================
@@ -620,17 +863,33 @@ func _on_packet_received(packet: Dictionary) -> void:
 	# compare the checksum for this frame.
 	# =================================================
 
-	if frame < current_frame:
-		if predicted_remote_inputs.has(frame):
-			var predicted: Dictionary = (
-				predicted_remote_inputs[frame]
-			)
+	var earliest_mismatch: int = -1
 
-			if predicted.hash() != input_data.hash():
-				prediction_misses += 1
+	for record: Dictionary in newly_inserted:
+		var frame: int = int(record.get("frame", -1))
 
-				# Correct the simulation FIRST.
-				_rollback_and_replay(frame)
+		if frame >= current_frame:
+			continue
+
+		if not predicted_remote_inputs.has(frame):
+			continue
+
+		var predicted: Dictionary = predicted_remote_inputs[frame]
+		var input_data: Dictionary = record.get("input", {})
+
+		if not _inputs_equal(predicted, input_data):
+			prediction_misses += 1
+
+			if earliest_mismatch < 0 or frame < earliest_mismatch:
+				earliest_mismatch = frame
+
+	if earliest_mismatch >= 0:
+		if not snapshots.has(earliest_mismatch):
+			_enter_history_exhaustion(earliest_mismatch)
+			return
+
+		# Correct all newly merged frames in one replay.
+		_rollback_and_replay(earliest_mismatch)
 
 	# =================================================
 	# NOW compare.
@@ -652,6 +911,7 @@ func _rollback_and_replay(from_frame: int) -> void:
 		return
 
 	if not snapshots.has(from_frame):
+		_enter_history_exhaustion(from_frame)
 		return
 
 	var original_current_frame: int = current_frame

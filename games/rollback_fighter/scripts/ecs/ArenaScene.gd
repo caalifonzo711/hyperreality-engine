@@ -282,6 +282,15 @@ func _print_benchmark_results() -> void:
 	print("LeadLimit: %d" % int(rollback_session.get_prediction_lead_limit()))
 	print("LeadStalled: %s" % str(rollback_session.lead_stalled))
 	print("LeadStallTicks: %d" % int(rollback_session.lead_stall_ticks))
+	print("RedundantFramesReceived: %d" % int(rollback_session.redundant_frames_received))
+	print("RecoveredMissingFrames: %d" % int(rollback_session.recovered_missing_frames))
+	print("DuplicateInputFrames: %d" % int(rollback_session.duplicate_input_frames))
+	print("RemoteConfirmedThrough: %d" % int(rollback_session.remote_confirmed_through))
+	print("ConfirmationLag: %d" % int(rollback_session.get_confirmation_lag()))
+	print("EarliestMissingRemoteFrame: %d" % int(rollback_session.get_earliest_missing_remote_frame()))
+	print("OldestRetainedSnapshot: %d" % int(rollback_session.get_oldest_retained_snapshot()))
+	print("HistoryExhausted: %s" % str(rollback_session.history_exhausted))
+	print("HistoryExhaustionFrame: %d" % int(rollback_session.history_exhaustion_frame))
 	print("RollbackCount: %d" % int(rollback_session.rollback_count))
 	print("MaxRollbackDepth: %d" % int(rollback_session.max_rollback_depth))
 	print("PredictionMisses: %d" % int(rollback_session.prediction_misses))
@@ -384,6 +393,9 @@ func _update_rollback_debug_hud() -> void:
 			"Packets=%d | LastRemoteFrame=%d | Gap=%d\n" +
 			"PredictionLead=%d | Max=%d | Limit=%d\n" +
 			"LeadStalled=%s | StallTicks=%d\n" +
+			"Redundant=%d | Recovered=%d | Duplicates=%d\n" +
+			"ConfirmedThrough=%d | ConfirmationLag=%d | Missing=%d\n" +
+			"OldestSnapshot=%d | HistoryExhausted=%s | Frame=%d\n" +
 			"Rollback count=%d | Max depth=%d | Misses=%d\n" +
 			"Checksum compared=%d | Mismatches=%d | First=%d"
 		) % [
@@ -401,6 +413,15 @@ func _update_rollback_debug_hud() -> void:
 			int(rollback_session.get_prediction_lead_limit()),
 			str(rollback_session.lead_stalled),
 			int(rollback_session.lead_stall_ticks),
+			int(rollback_session.redundant_frames_received),
+			int(rollback_session.recovered_missing_frames),
+			int(rollback_session.duplicate_input_frames),
+			int(rollback_session.remote_confirmed_through),
+			int(rollback_session.get_confirmation_lag()),
+			int(rollback_session.get_earliest_missing_remote_frame()),
+			int(rollback_session.get_oldest_retained_snapshot()),
+			str(rollback_session.history_exhausted),
+			int(rollback_session.history_exhaustion_frame),
 			int(rollback_session.rollback_count),
 			int(rollback_session.max_rollback_depth),
 			int(rollback_session.prediction_misses),
