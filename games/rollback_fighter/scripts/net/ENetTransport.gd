@@ -24,6 +24,7 @@ signal start_match_received()
 # 12 = ~200ms
 @export var artificial_delay_frames: int = 0
 @export var artificial_jitter_frames: int = 0
+@export var deterministic_stress_input_loss_enabled: bool = false
 
 var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 var is_host: bool = false
@@ -32,6 +33,7 @@ var remote_peer_id: int = 0
 
 var _delayed_packets: Array[Dictionary] = []
 var _start_match_sent: bool = false
+var deterministic_stress_input_packets_dropped: int = 0
 
 
 func host(host_port: int = 7777) -> void:
@@ -97,12 +99,41 @@ func send_packet(packet: Dictionary) -> void:
 	if not is_connected:
 		return
 
+	if _should_drop_stress_input_packet(packet):
+		deterministic_stress_input_packets_dropped += 1
+		return
+
 	if is_host:
 		if remote_peer_id == 0:
 			return
 		_rpc_receive_packet.rpc_id(remote_peer_id, packet)
 	else:
 		_rpc_receive_packet.rpc_id(1, packet)
+
+
+func _should_drop_stress_input_packet(packet: Dictionary) -> bool:
+	if not deterministic_stress_input_loss_enabled:
+		return false
+
+	if str(packet.get("type", "")) != "input":
+		return false
+
+	var packet_player_id: int = int(packet.get("player_id", -1))
+	var frame: int = int(packet.get("frame", -1))
+
+	if packet_player_id == 1:
+		return (
+			(frame >= 600 and frame <= 605)
+			or (frame >= 1860 and frame <= 1872)
+		)
+
+	if packet_player_id == 2:
+		return (
+			(frame >= 3000 and frame <= 3005)
+			or (frame >= 4260 and frame <= 4272)
+		)
+
+	return false
 
 
 func send_input_repair_request(frame: int, player_id: int) -> void:

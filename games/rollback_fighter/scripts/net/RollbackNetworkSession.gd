@@ -41,6 +41,8 @@ var repair_responses_sent: int = 0
 var repair_responses_received: int = 0
 var last_repair_requested_frame: int = -1
 var last_repair_recovered_frame: int = -1
+var repair_unavailable_error: bool = false
+var repair_unavailable_count: int = 0
 var match_started: bool = false
 
 var adapter: FighterRollbackAdapter = null
@@ -155,6 +157,8 @@ func reset_session() -> void:
 	repair_responses_received = 0
 	last_repair_requested_frame = -1
 	last_repair_recovered_frame = -1
+	repair_unavailable_error = false
+	repair_unavailable_count = 0
 	_repair_tick = 0
 	_pending_repair_frame = -1
 	_next_repair_request_tick = 0
@@ -937,6 +941,8 @@ func _on_input_repair_request_received(
 		return
 
 	if not local_inputs.has(frame):
+		repair_unavailable_error = true
+		repair_unavailable_count += 1
 		push_error(
 			"[Rollback] REPAIR UNAVAILABLE frame=%d current_frame=%d max_history=%d"
 			% [frame, current_frame, MAX_ROLLBACK_FRAMES]
@@ -975,6 +981,8 @@ func _on_input_repair_response_received(
 		return
 
 	if not available:
+		repair_unavailable_error = true
+		repair_unavailable_count += 1
 		_repair_unavailable_frame = frame
 		push_error(
 			"[Rollback] REMOTE REPAIR UNAVAILABLE frame=%d current_frame=%d"

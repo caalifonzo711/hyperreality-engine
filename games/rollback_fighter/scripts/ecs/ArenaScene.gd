@@ -27,6 +27,16 @@ const ENET_PORT := 7777
 const QA_BOT_BENCHMARK_ENABLED := false
 const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 
+# Separate stress benchmark. Keep QA_BOT_BENCHMARK_ENABLED false when enabled.
+# Natural stress: QA_STRESS_BENCHMARK_ENABLED=true, FORCE_LOSS=false.
+# Loss stress:    QA_STRESS_BENCHMARK_ENABLED=true, FORCE_LOSS=true.
+const QA_STRESS_BENCHMARK_ENABLED := false
+const QA_STRESS_FORCE_PACKET_LOSS := false
+const STRESS_SCHEDULE_FRAMES := 7200
+const STRESS_DRAIN_FRAMES := 120
+const STRESS_TOTAL_FRAMES := STRESS_SCHEDULE_FRAMES + STRESS_DRAIN_FRAMES
+const STRESS_CYCLE_FRAMES := 1200
+
 # Set these on BOTH computers before each test:
 # 0  = baseline LAN
 # 6  = ~100ms
@@ -112,6 +122,10 @@ func _ready() -> void:
 		transport.name = "ENetTransport"
 		transport.artificial_delay_frames = BENCHMARK_DELAY_FRAMES
 		transport.artificial_jitter_frames = BENCHMARK_JITTER_FRAMES
+		transport.deterministic_stress_input_loss_enabled = (
+			QA_STRESS_BENCHMARK_ENABLED
+			and QA_STRESS_FORCE_PACKET_LOSS
+		)
 		add_child(transport)
 
 		if ENET_HOST:
@@ -142,11 +156,14 @@ func _ready() -> void:
 		if not transport.start_match_received.is_connected(_on_start_match_received):
 			transport.start_match_received.connect(_on_start_match_received)
 
-	print("[Arena] Benchmark config | bot=%s delay=%d jitter=%d duration=%d" % [
-		str(QA_BOT_BENCHMARK_ENABLED),
+	if QA_BOT_BENCHMARK_ENABLED and QA_STRESS_BENCHMARK_ENABLED:
+		push_error("[Arena] Enable only one QA benchmark mode at a time.")
+
+	print("[Arena] Benchmark config | mode=%s delay=%d jitter=%d duration=%d" % [
+		_benchmark_mode_name(),
 		BENCHMARK_DELAY_FRAMES,
 		BENCHMARK_JITTER_FRAMES,
-		BENCHMARK_DURATION_FRAMES
+		_benchmark_duration_frames()
 	])
 
 
@@ -200,6 +217,9 @@ func _on_frame_pre_draw() -> void:
 
 
 func _collect_local_input() -> Dictionary:
+	if QA_STRESS_BENCHMARK_ENABLED:
+		return _collect_stress_bot_input()
+
 	if QA_BOT_BENCHMARK_ENABLED:
 		return _collect_bot_input()
 
@@ -238,17 +258,145 @@ func _collect_bot_input() -> Dictionary:
 	}
 
 
+func _stress_neutral_input() -> Dictionary:
+	return {
+		"mx": 0.0,
+		"lean_l": false,
+		"lean_r": false,
+		"atk_l": false,
+		"atk_h": false,
+		"block": false,
+		"dodge": false,
+	}
+
+
+func _stress_frame_inclusive(frame: int, first: int, last: int) -> bool:
+	return frame >= first and frame <= last
+
+
+func _stress_local_toward_axis() -> float:
+	return 1.0 if local_player_id == 1 else -1.0
+
+
+func _stress_reversal_axis(
+	cycle_frame: int,
+	first_frame: int,
+	segment_frames: int,
+	starts_toward: bool
+) -> float:
+	var segment: int = int(
+		(cycle_frame - first_frame) / segment_frames
+	)
+	var use_toward: bool = (segment % 2 == 0) == starts_toward
+	var toward: float = _stress_local_toward_axis()
+	return toward if use_toward else -toward
+
+
+func _collect_stress_bot_input() -> Dictionary:
+	var f: int = 0
+	if rollback_session != null:
+		f = int(rollback_session.current_frame)
+
+	if f >= STRESS_SCHEDULE_FRAMES:
+		return _stress_neutral_input()
+
+	var cycle: int = int(f / STRESS_CYCLE_FRAMES)
+	var t: int = f % STRESS_CYCLE_FRAMES
+	var aggressor_id: int = 1 if cycle % 2 == 0 else 2
+	var is_aggressor: bool = local_player_id == aggressor_id
+	var toward: float = _stress_local_toward_axis()
+	var mx: float = 0.0
+
+	if _stress_frame_inclusive(t, 0, 33):
+		mx = toward
+	elif _stress_frame_inclusive(t, 34, 81):
+		mx = _stress_reversal_axis(t, 34, 4, false)
+	elif _stress_frame_inclusive(t, 228, 235):
+		mx = toward
+	elif _stress_frame_inclusive(t, 320, 359):
+		mx = -toward
+	elif _stress_frame_inclusive(t, 360, 407):
+		mx = toward
+	elif _stress_frame_inclusive(t, 408, 455):
+		mx = _stress_reversal_axis(t, 408, 3, false)
+	elif _stress_frame_inclusive(t, 660, 719):
+		mx = _stress_reversal_axis(t, 660, 5, true)
+	elif _stress_frame_inclusive(t, 720, 779):
+		mx = 1.0 if aggressor_id == 1 else -1.0
+	elif _stress_frame_inclusive(t, 780, 809):
+		mx = 1.0
+	elif _stress_frame_inclusive(t, 810, 839):
+		mx = -1.0
+	elif _stress_frame_inclusive(t, 1020, 1079):
+		mx = _stress_reversal_axis(t, 1020, 4, true)
+
+	var atk_l: bool = false
+	var atk_h: bool = false
+	var block: bool = false
+	var dodge: bool = false
+
+	if is_aggressor:
+		atk_l = t in [136, 216, 678, 708, 770, 882, 1040]
+		atk_h = t in [179, 248, 742, 1053]
+		block = (
+			_stress_frame_inclusive(t, 282, 299)
+			or _stress_frame_inclusive(t, 844, 868)
+		)
+	else:
+		atk_l = t == 286
+		atk_h = t == 850
+		block = (
+			_stress_frame_inclusive(t, 132, 150)
+			or _stress_frame_inclusive(t, 244, 265)
+			or _stress_frame_inclusive(t, 674, 690)
+			or _stress_frame_inclusive(t, 764, 780)
+			or _stress_frame_inclusive(t, 1036, 1046)
+		)
+		dodge = t in [176, 704, 738, 878, 1050]
+
+	return {
+		"mx": mx,
+		"lean_l": false,
+		"lean_r": false,
+		"atk_l": atk_l,
+		"atk_h": atk_h,
+		"block": block,
+		"dodge": dodge,
+	}
+
+
+func _benchmark_enabled() -> bool:
+	return QA_BOT_BENCHMARK_ENABLED or QA_STRESS_BENCHMARK_ENABLED
+
+
+func _benchmark_duration_frames() -> int:
+	if QA_STRESS_BENCHMARK_ENABLED:
+		return STRESS_TOTAL_FRAMES
+
+	return BENCHMARK_DURATION_FRAMES
+
+
+func _benchmark_mode_name() -> String:
+	if QA_STRESS_BENCHMARK_ENABLED:
+		return "STRESS_LOSS" if QA_STRESS_FORCE_PACKET_LOSS else "STRESS_NATURAL"
+
+	if QA_BOT_BENCHMARK_ENABLED:
+		return "CONTROLLED_SINGLE_JAB"
+
+	return "MANUAL"
+
+
 func _start_benchmark_timer() -> void:
 	benchmark_running = true
 	benchmark_complete = false
 	benchmark_start_frame = int(rollback_session.current_frame) if rollback_session != null else 0
 
-	print("[Benchmark] START | player_id=%d delay=%d jitter=%d bot=%s duration=%d" % [
+	print("[Benchmark] START | player_id=%d delay=%d jitter=%d mode=%s duration=%d" % [
 		local_player_id,
 		BENCHMARK_DELAY_FRAMES,
 		BENCHMARK_JITTER_FRAMES,
-		str(QA_BOT_BENCHMARK_ENABLED),
-		BENCHMARK_DURATION_FRAMES
+		_benchmark_mode_name(),
+		_benchmark_duration_frames()
 	])
 
 
@@ -258,7 +406,7 @@ func _check_benchmark_complete() -> void:
 
 	var elapsed_frames: int = int(rollback_session.current_frame) - benchmark_start_frame
 
-	if elapsed_frames >= BENCHMARK_DURATION_FRAMES:
+	if elapsed_frames >= _benchmark_duration_frames():
 		benchmark_running = false
 		benchmark_complete = true
 		_print_benchmark_results()
@@ -283,10 +431,13 @@ func _print_benchmark_results() -> void:
 	print("========== ROLLBACK BENCHMARK RESULT ==========")
 	print("PlayerID: %d" % local_player_id)
 	print("Mode: %s" % ("ENet" if USE_ENET else "LatencyHarness"))
-	print("BotInput: %s" % str(QA_BOT_BENCHMARK_ENABLED))
+	print("BenchmarkMode: %s" % _benchmark_mode_name())
 	print("DelayFrames: %d" % BENCHMARK_DELAY_FRAMES)
 	print("JitterFrames: %d" % BENCHMARK_JITTER_FRAMES)
-	print("DurationFrames: %d" % BENCHMARK_DURATION_FRAMES)
+	print("DurationFrames: %d" % _benchmark_duration_frames())
+	if QA_STRESS_BENCHMARK_ENABLED:
+		print("StressScheduleFrames: %d" % STRESS_SCHEDULE_FRAMES)
+		print("StressDrainFrames: %d" % STRESS_DRAIN_FRAMES)
 	print("Packets: %d" % int(rollback_session.packets_received))
 	print("LastRemoteFrame: %d" % int(rollback_session.last_remote_frame))
 	print("LocalFrame: %d" % int(rollback_session.current_frame))
@@ -305,6 +456,8 @@ func _print_benchmark_results() -> void:
 	print("RepairResponsesReceived: %d" % int(rollback_session.repair_responses_received))
 	print("LastRepairRequestedFrame: %d" % int(rollback_session.last_repair_requested_frame))
 	print("LastRepairRecoveredFrame: %d" % int(rollback_session.last_repair_recovered_frame))
+	print("RepairUnavailable: %s" % str(rollback_session.repair_unavailable_error))
+	print("RepairUnavailableCount: %d" % int(rollback_session.repair_unavailable_count))
 	print("RemoteConfirmedThrough: %d" % int(rollback_session.remote_confirmed_through))
 	print("ConfirmationLag: %d" % int(rollback_session.get_confirmation_lag()))
 	print("EarliestMissingRemoteFrame: %d" % int(rollback_session.get_earliest_missing_remote_frame()))
@@ -314,6 +467,8 @@ func _print_benchmark_results() -> void:
 	print("RollbackCount: %d" % int(rollback_session.rollback_count))
 	print("MaxRollbackDepth: %d" % int(rollback_session.max_rollback_depth))
 	print("PredictionMisses: %d" % int(rollback_session.prediction_misses))
+	print("InputMutationError: %s" % str(rollback_session.input_mutation_error))
+	print("InputMutationErrorFrame: %d" % int(rollback_session.input_mutation_error_frame))
 
 	print("ChecksumFramesCompared: %d" % int(rollback_session.checksum_frames_compared))
 	print("ChecksumMismatchCount: %d" % int(rollback_session.checksum_mismatch_count))
@@ -323,13 +478,73 @@ func _print_benchmark_results() -> void:
 	print("FirstStateDivergenceField: %s" % adapter.first_debug_field)
 	print("FirstStateDivergenceLocal: %s" % adapter.first_debug_local)
 	print("FirstStateDivergenceRemote: %s" % adapter.first_debug_remote)
-	print("P1AttackID: %d" % int(player_state.attack_id))
-	print("P1HitConfirmed: %s" % str(player_state.hit_confirmed))
+	print("P1HP: %d" % int(player_state.hp))
 	print("P2HP: %d" % int(opponent_state.hp))
+	print("P1State: %d" % int(player_state.state))
+	print("P2State: %d" % int(opponent_state.state))
+	print("P1FramesLeft: %d" % int(player_state.frames_left))
+	print("P2FramesLeft: %d" % int(opponent_state.frames_left))
+	print("P1AttackID: %d" % int(player_state.attack_id))
+	print("P2AttackID: %d" % int(opponent_state.attack_id))
+	print("P1HitConfirmed: %s" % str(player_state.hit_confirmed))
+	print("P2HitConfirmed: %s" % str(opponent_state.hit_confirmed))
+
+	if QA_STRESS_BENCHMARK_ENABLED and USE_ENET and transport != null:
+		print("ForcedInputPacketsDropped: %d" % int(transport.get(
+			"deterministic_stress_input_packets_dropped"
+		)))
+
+	if QA_STRESS_BENCHMARK_ENABLED:
+		_print_stress_verdict()
 
 	print("InputDelayFrames: %d" % BENCHMARK_INPUT_DELAY_FRAMES)
 	print("===============================================")
 	print("")
+
+
+func _print_stress_verdict() -> void:
+	var failures: Array[String] = []
+	var required_confirmed_frame: int = STRESS_SCHEDULE_FRAMES - 1
+
+	if int(rollback_session.current_frame) < STRESS_TOTAL_FRAMES:
+		failures.append("benchmark did not reach the full stress duration")
+	if int(rollback_session.checksum_mismatch_count) != 0:
+		failures.append("checksum mismatches were recorded")
+	if int(rollback_session.first_checksum_mismatch_frame) != -1:
+		failures.append("a first checksum mismatch frame was recorded")
+	if int(adapter.first_debug_frame) != -1:
+		failures.append("a first state divergence frame was recorded")
+	if bool(rollback_session.history_exhausted):
+		failures.append("rollback history was exhausted")
+	if bool(rollback_session.input_mutation_error):
+		failures.append("INPUT MUTATION was reported")
+	if bool(rollback_session.repair_unavailable_error):
+		failures.append("REPAIR UNAVAILABLE was reported")
+	if int(rollback_session.max_prediction_lead) > int(
+		rollback_session.get_prediction_lead_limit()
+	):
+		failures.append("prediction lead exceeded its configured limit")
+	if int(rollback_session.remote_confirmed_through) < required_confirmed_frame:
+		failures.append("stress schedule inputs were not fully confirmed")
+	if int(rollback_session.local_checksum_confirmed_through) < required_confirmed_frame:
+		failures.append("stress schedule checksums were not fully confirmed")
+	if int(player_state.hp) <= 0 or int(opponent_state.hp) <= 0:
+		failures.append("a fighter died before the stress benchmark completed")
+
+	if QA_STRESS_FORCE_PACKET_LOSS:
+		var expected_repair_frame: int = 4260 if local_player_id == 1 else 1860
+		if int(rollback_session.repair_requests_sent) < 1:
+			failures.append("forced persistent hole sent no repair request")
+		if int(rollback_session.repair_responses_received) < 1:
+			failures.append("forced persistent hole received no repair response")
+		if int(rollback_session.last_repair_recovered_frame) < expected_repair_frame:
+			failures.append("forced persistent hole was not repaired")
+
+	print("StressVerdict: %s" % ("PASS" if failures.is_empty() else "FAIL"))
+	print("StressFailureCount: %d" % failures.size())
+	for failure: String in failures:
+		print("StressFailure: %s" % failure)
+
 
 func _update_visuals() -> void:
 	if p1_placeholder:
@@ -344,8 +559,8 @@ func _update_play_hud() -> void:
 
 	if rollback_session != null and bool(rollback_session.match_started):
 		play_status_label.text = (
-			"QA BOT BENCHMARK"
-			if QA_BOT_BENCHMARK_ENABLED
+			_benchmark_mode_name()
+			if _benchmark_enabled()
 			else "FIGHT!"
 		)
 		return
@@ -627,7 +842,7 @@ func _on_start_match_received() -> void:
 
 	print("[Arena] start_match received. Starting rollback session.")
 	rollback_session.start_session()
-	if QA_BOT_BENCHMARK_ENABLED:
+	if _benchmark_enabled():
 		_start_benchmark_timer()
 
 
