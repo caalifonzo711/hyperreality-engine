@@ -58,6 +58,10 @@ var local_player_id: int = 1
 var benchmark_running: bool = false
 var benchmark_complete: bool = false
 var benchmark_start_frame: int = 0
+var p1_sprite_debug: Node = null
+var p2_sprite_debug: Node = null
+var _physics_ticks_since_last_render: int = 0
+var _last_render_physics_ticks: int = 0
 
 
 @onready var cam: Camera2D = get_node_or_null("Camera2D")
@@ -90,8 +94,11 @@ func _ready() -> void:
 	opponent_state.position = Vector2(600, 250)
 
 	_ensure_opponent_placeholder()
-	_bind_sprite_to_state(p1_placeholder, player_state, "P1")
-	_bind_sprite_to_state(p2_placeholder, opponent_state, "P2")
+	p1_sprite_debug = _bind_sprite_to_state(p1_placeholder, player_state, "P1")
+	p2_sprite_debug = _bind_sprite_to_state(p2_placeholder, opponent_state, "P2")
+
+	if not RenderingServer.frame_pre_draw.is_connected(_on_frame_pre_draw):
+		RenderingServer.frame_pre_draw.connect(_on_frame_pre_draw)
 
 	lean_system.player_state = player_state
 	combat_system.p1_state = player_state
@@ -144,6 +151,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_physics_ticks_since_last_render += 1
 	_update_play_hud()
 
 	if rollback_session and not bool(rollback_session.match_started):
@@ -183,6 +191,12 @@ func _physics_process(delta: float) -> void:
 	_update_health_tint()
 	_update_combat_debug_hud()
 	_update_rollback_debug_hud()
+
+
+func _on_frame_pre_draw() -> void:
+	_last_render_physics_ticks = _physics_ticks_since_last_render
+	_physics_ticks_since_last_render = 0
+	_update_visual_diagnostic_hud()
 
 
 func _collect_local_input() -> Dictionary:
@@ -432,18 +446,6 @@ func _update_rollback_debug_hud() -> void:
 
 
 func _update_combat_debug_hud() -> void:
-	if debug_pos_label:
-		debug_pos_label.text = "P1 state=%s frames=%d atk=%s hp=%d\nP2 state=%s frames=%d atk=%s hp=%d" % [
-			_state_name(player_state.state),
-			player_state.frames_left,
-			_attack_name(player_state.attack_kind),
-			player_state.hp,
-			_state_name(opponent_state.state),
-			opponent_state.frames_left,
-			_attack_name(opponent_state.attack_kind),
-			opponent_state.hp
-		]
-
 	if debug_input_label:
 		debug_input_label.text = "P1 block=%s active=%s hit=%s | P2 block=%s active=%s hit=%s" % [
 			str(player_state.blocking),
@@ -453,6 +455,81 @@ func _update_combat_debug_hud() -> void:
 			str(opponent_state.attack_active),
 			str(opponent_state.hit_confirmed)
 		]
+
+
+func _sprite_visual_debug(sprite: Node) -> Dictionary:
+	if sprite != null and sprite.has_method("get_debug_visual_state"):
+		return sprite.call("get_debug_visual_state")
+
+	return {
+		"mode": "unavailable",
+		"frame": -1,
+		"texture_size": Vector2.ZERO,
+	}
+
+
+func _update_visual_diagnostic_hud() -> void:
+	if debug_pos_label == null:
+		return
+
+	var simulation_frame: int = -1
+	var rollback_count: int = 0
+	var prediction_lead: int = 0
+
+	if rollback_session != null:
+		simulation_frame = int(rollback_session.current_frame)
+		rollback_count = int(rollback_session.rollback_count)
+		prediction_lead = int(rollback_session.get_prediction_lead())
+
+	var p1_rendered := (
+		p1_placeholder.position
+		if p1_placeholder != null
+		else Vector2.ZERO
+	)
+	var p2_rendered := (
+		p2_placeholder.position
+		if p2_placeholder != null
+		else Vector2.ZERO
+	)
+	var p1_visual: Dictionary = _sprite_visual_debug(p1_sprite_debug)
+	var p2_visual: Dictionary = _sprite_visual_debug(p2_sprite_debug)
+	var p1_texture_size: Vector2 = p1_visual.get("texture_size", Vector2.ZERO)
+	var p2_texture_size: Vector2 = p2_visual.get("texture_size", Vector2.ZERO)
+
+	debug_pos_label.text = (
+		"SimulationFrame=%d | PhysicsTicksSinceLastRender=%d | FPS=%d\n" +
+		"RollbackCount=%d | PredictionLead=%d\n" +
+		"P1 Auth=(%.2f, %.2f) Node=(%.2f, %.2f) Delta=(%.2f, %.2f)\n" +
+		"P1 Anim=%s Frame=%d Texture=(%.0f, %.0f)\n" +
+		"P2 Auth=(%.2f, %.2f) Node=(%.2f, %.2f) Delta=(%.2f, %.2f)\n" +
+		"P2 Anim=%s Frame=%d Texture=(%.0f, %.0f)"
+	) % [
+		simulation_frame,
+		_last_render_physics_ticks,
+		int(Engine.get_frames_per_second()),
+		rollback_count,
+		prediction_lead,
+		player_state.position.x,
+		player_state.position.y,
+		p1_rendered.x,
+		p1_rendered.y,
+		player_state.position.x - p1_rendered.x,
+		player_state.position.y - p1_rendered.y,
+		str(p1_visual.get("mode", "unavailable")),
+		int(p1_visual.get("frame", -1)),
+		p1_texture_size.x,
+		p1_texture_size.y,
+		opponent_state.position.x,
+		opponent_state.position.y,
+		p2_rendered.x,
+		p2_rendered.y,
+		opponent_state.position.x - p2_rendered.x,
+		opponent_state.position.y - p2_rendered.y,
+		str(p2_visual.get("mode", "unavailable")),
+		int(p2_visual.get("frame", -1)),
+		p2_texture_size.x,
+		p2_texture_size.y,
+	]
 
 
 func _state_name(state: int) -> String:
@@ -496,9 +573,9 @@ func _ensure_opponent_placeholder() -> void:
 		add_child(p2_placeholder)
 
 
-func _bind_sprite_to_state(placeholder: Node, state: Node, label: String) -> void:
+func _bind_sprite_to_state(placeholder: Node, state: Node, label: String) -> Node:
 	if placeholder == null or state == null:
-		return
+		return null
 
 	var sprite: Node = placeholder.find_child("PlayerSpriteDebug", true, false)
 
@@ -517,12 +594,13 @@ func _bind_sprite_to_state(placeholder: Node, state: Node, label: String) -> voi
 					stack.append(c)
 
 	if sprite == null:
-		return
+		return null
 
 	if sprite.get("debug_label") != null:
 		sprite.set("debug_label", label)
 
 	sprite.call("bind_state", state)
+	return sprite
 
 
 func _on_start_match_received() -> void:

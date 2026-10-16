@@ -61,6 +61,18 @@ func bind_state(state: Node) -> void:
 	print("[PlayerSpriteDebug %s] bound to state id=%s" % [debug_label, str(_ps.get_instance_id())])
 
 
+func get_debug_visual_state() -> Dictionary:
+	var texture_size := Vector2.ZERO
+	if texture != null:
+		texture_size = texture.get_size()
+
+	return {
+		"mode": _mode,
+		"frame": _frame,
+		"texture_size": texture_size,
+	}
+
+
 func _process(delta: float) -> void:
 	if _ps == null:
 		return
