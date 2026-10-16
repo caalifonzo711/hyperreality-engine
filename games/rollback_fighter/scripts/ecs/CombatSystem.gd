@@ -31,8 +31,8 @@ var _heavy_loaded: bool = false
 # Damage / tuning
 # =================================================
 
-const LIGHT_DMG: int = 5
-const HEAVY_DMG: int = 12
+const LIGHT_DMG: int = 7
+const HEAVY_DMG: int = 14
 
 
 # =================================================
@@ -74,16 +74,19 @@ const HEAVY_COOLDOWN_FRAMES: int = 12
 # Knockback
 # =================================================
 
-const KNOCK_X_LIGHT: float = 280.0
-const KNOCK_X_HEAVY: float = 460.0
+const KNOCK_X_LIGHT: float = 340.0
+const KNOCK_X_HEAVY: float = 700.0
 
 
 # =================================================
 # Hitstop
 # =================================================
 
-const HITSTOP_LIGHT: int = 2
-const HITSTOP_HEAVY: int = 4
+const HITSTOP_LIGHT: int = 3
+const HITSTOP_HEAVY: int = 7
+
+const HITSTUN_LIGHT: int = 8
+const HITSTUN_HEAVY: int = 14
 
 
 # =================================================
@@ -188,6 +191,7 @@ func _eval_attacks(
 	var dmg: int = LIGHT_DMG
 	var knock_impulse: float = KNOCK_X_LIGHT
 	var hitstop: int = HITSTOP_LIGHT
+	var hitstun: int = HITSTUN_LIGHT
 
 
 	# -----------------------------------------
@@ -201,6 +205,7 @@ func _eval_attacks(
 		dmg = LIGHT_DMG
 		knock_impulse = KNOCK_X_LIGHT
 		hitstop = HITSTOP_LIGHT
+		hitstun = HITSTUN_LIGHT
 
 
 	# -----------------------------------------
@@ -214,6 +219,7 @@ func _eval_attacks(
 		dmg = HEAVY_DMG
 		knock_impulse = KNOCK_X_HEAVY
 		hitstop = HITSTOP_HEAVY
+		hitstun = HITSTUN_HEAVY
 
 	else:
 		return
@@ -232,7 +238,8 @@ func _eval_attacks(
 		defender,
 		dmg,
 		knock_impulse,
-		hitstop
+		hitstop,
+		hitstun
 	)
 
 
@@ -517,7 +524,8 @@ func _do_damage(
 	defender: PlayerState,
 	dmg: int,
 	knock_impulse: float,
-	hitstop_frames: int
+	hitstop_frames: int,
+	hitstun_frames: int
 ) -> void:
 
 	# -----------------------------------------
@@ -550,7 +558,7 @@ func _do_damage(
 		print("[Combat] BLOCKED!")
 
 	else:
-		defender.take_damage(dmg)
+		defender.take_damage(dmg, hitstun_frames)
 
 		var dir := signf(
 			defender.position.x

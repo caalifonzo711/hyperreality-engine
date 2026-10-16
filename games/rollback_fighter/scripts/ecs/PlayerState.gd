@@ -163,7 +163,10 @@ func _safe_frame_int(value: Variant, fallback: int) -> int:
 	return clampi(v, 1, 120)
 
 
-func take_damage(amount: int) -> void:
+func take_damage(
+	amount: int,
+	hitstun_frames: int = HURT_DURATION
+) -> void:
 	hp = maxi(hp - amount, 0)
 
 	if hp <= 0:
@@ -176,7 +179,7 @@ func take_damage(amount: int) -> void:
 		ground_velocity_x = 0.0
 	else:
 		state = MoveState.HURT
-		hurt_frames = HURT_DURATION
+		hurt_frames = hitstun_frames
 		attack_active = false
 		attack_kind = AttackKind.NONE
 
