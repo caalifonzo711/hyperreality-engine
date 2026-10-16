@@ -13,11 +13,11 @@ var max_knock_speed: float = 1100.0
 
 var max_hp: int = 100
 var hp: int = 100
-var move_speed: float = 220.0
+var move_speed: float = 320.0
 
-const GROUND_ACCELERATION: float = 4800.0
-const GROUND_BRAKING: float = 6000.0
-const REVERSAL_ACCELERATION: float = 7200.0
+const GROUND_ACCELERATION: float = 14400.0
+const GROUND_BRAKING: float = 19200.0
+const REVERSAL_ACCELERATION: float = 28800.0
 
 var atk_l_pressed: bool = false
 var atk_h_pressed: bool = false

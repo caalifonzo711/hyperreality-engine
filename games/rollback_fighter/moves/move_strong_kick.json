@@ -1,5 +1,5 @@
 {
-  "active": 4.0,
+  "active": 3.0,
   "cancel_window_end": 0,
   "cancel_window_start": 0,
   "damage": 0,
@@ -12,7 +12,7 @@
   "priority": 0,
   "pushback_x": 0.0,
   "pushback_y": 0.0,
-  "recovery": 18.0,
-  "startup": 12.0,
+  "recovery": 8.0,
+  "startup": 5.0,
   "tags": []
 }

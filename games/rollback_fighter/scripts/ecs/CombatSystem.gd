@@ -66,8 +66,8 @@ const BODY_HURTBOX_H: int = 48
 # Cooldowns
 # =================================================
 
-const LIGHT_COOLDOWN_FRAMES: int = 11
-const HEAVY_COOLDOWN_FRAMES: int = 27
+const LIGHT_COOLDOWN_FRAMES: int = 6
+const HEAVY_COOLDOWN_FRAMES: int = 12
 
 
 # =================================================
