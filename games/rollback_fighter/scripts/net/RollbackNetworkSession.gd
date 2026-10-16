@@ -4,7 +4,11 @@ class_name RollbackNetworkSession
 const PHYS_DT := 1.0 / 60.0
 const MAX_ROLLBACK_FRAMES := 60
 const MAX_PREDICTION_FRAMES := 8
-const INPUT_REDUNDANCY_FRAMES := 3
+const INPUT_REDUNDANCY_FRAMES := 12
+const REPAIR_REQUEST_RETRY_TICKS := 30
+const REPAIR_REQUEST_MAX_AGE := (
+	MAX_ROLLBACK_FRAMES - MAX_PREDICTION_FRAMES - 1
+)
 
 var player_id: int = 1
 var input_delay_frames: int = 0
@@ -31,10 +35,20 @@ var history_exhausted: bool = false
 var history_exhaustion_frame: int = -1
 var input_mutation_error: bool = false
 var input_mutation_error_frame: int = -1
+var repair_requests_sent: int = 0
+var repair_requests_received: int = 0
+var repair_responses_sent: int = 0
+var repair_responses_received: int = 0
+var last_repair_requested_frame: int = -1
+var last_repair_recovered_frame: int = -1
 var match_started: bool = false
 
 var adapter: FighterRollbackAdapter = null
 var transport: Node = null
+var _repair_tick: int = 0
+var _pending_repair_frame: int = -1
+var _next_repair_request_tick: int = 0
+var _repair_unavailable_frame: int = -1
 
 
 # =================================================
@@ -95,6 +109,22 @@ func setup(
 		if not transport.packet_received.is_connected(_on_packet_received):
 			transport.packet_received.connect(_on_packet_received)
 
+	if transport and transport.has_signal("input_repair_request_received"):
+		if not transport.input_repair_request_received.is_connected(
+			_on_input_repair_request_received
+		):
+			transport.input_repair_request_received.connect(
+				_on_input_repair_request_received
+			)
+
+	if transport and transport.has_signal("input_repair_response_received"):
+		if not transport.input_repair_response_received.is_connected(
+			_on_input_repair_response_received
+		):
+			transport.input_repair_response_received.connect(
+				_on_input_repair_response_received
+			)
+
 
 func reset_session() -> void:
 	current_frame = 0
@@ -119,6 +149,16 @@ func reset_session() -> void:
 	history_exhaustion_frame = -1
 	input_mutation_error = false
 	input_mutation_error_frame = -1
+	repair_requests_sent = 0
+	repair_requests_received = 0
+	repair_responses_sent = 0
+	repair_responses_received = 0
+	last_repair_requested_frame = -1
+	last_repair_recovered_frame = -1
+	_repair_tick = 0
+	_pending_repair_frame = -1
+	_next_repair_request_tick = 0
+	_repair_unavailable_frame = -1
 
 	local_checksum = 0
 	remote_checksum = 0
@@ -262,6 +302,52 @@ func _enter_history_exhaustion(frame: int) -> void:
 			MAX_ROLLBACK_FRAMES,
 		]
 	)
+
+
+func _clear_resolved_repair_request() -> void:
+	if _pending_repair_frame < 0:
+		return
+
+	if _pending_repair_frame <= remote_confirmed_through:
+		_pending_repair_frame = -1
+		_next_repair_request_tick = 0
+		_repair_unavailable_frame = -1
+
+
+func _maybe_request_missing_remote_input() -> void:
+	_clear_resolved_repair_request()
+
+	var missing_frame: int = get_earliest_missing_remote_frame()
+	if missing_frame < 0:
+		return
+
+	if last_remote_frame - missing_frame < INPUT_REDUNDANCY_FRAMES:
+		return
+
+	var missing_age: int = current_frame - missing_frame
+	if missing_age >= REPAIR_REQUEST_MAX_AGE:
+		return
+
+	if _repair_unavailable_frame == missing_frame:
+		return
+
+	if _pending_repair_frame != missing_frame:
+		_pending_repair_frame = missing_frame
+		_next_repair_request_tick = 0
+
+	if _repair_tick < _next_repair_request_tick:
+		return
+
+	if transport == null:
+		return
+
+	if not transport.has_method("send_input_repair_request"):
+		return
+
+	transport.send_input_repair_request(missing_frame, player_id)
+	repair_requests_sent += 1
+	last_repair_requested_frame = missing_frame
+	_next_repair_request_tick = _repair_tick + REPAIR_REQUEST_RETRY_TICKS
 
 
 func _cleanup_old_history() -> bool:
@@ -561,6 +647,9 @@ func tick(local_input: Dictionary) -> void:
 	if transport and transport.has_method("tick"):
 		transport.tick()
 
+	_repair_tick += 1
+	_maybe_request_missing_remote_input()
+
 	var input_frame: int = (
 		current_frame
 		+ max(0, input_delay_frames)
@@ -747,6 +836,166 @@ func _report_input_mutation(frame: int) -> void:
 	)
 
 
+func _merge_remote_input_records(records: Array[Dictionary]) -> void:
+	if records.is_empty():
+		return
+
+	records.sort_custom(_input_record_less)
+
+	var newest_valid_frame: int = -1
+	var newly_inserted: Array[Dictionary] = []
+
+	for record: Dictionary in records:
+		var frame: int = int(record.get("frame", -1))
+		var input_data: Dictionary = record.get("input", {})
+		var is_redundant: bool = bool(
+			record.get("redundant", false)
+		)
+
+		newest_valid_frame = maxi(newest_valid_frame, frame)
+
+		if is_redundant:
+			redundant_frames_received += 1
+
+		if remote_inputs.has(frame):
+			var existing_input: Dictionary = remote_inputs[frame]
+
+			if _inputs_equal(existing_input, input_data):
+				duplicate_input_frames += 1
+			else:
+				_report_input_mutation(frame)
+
+			continue
+
+		if frame <= remote_confirmed_through:
+			duplicate_input_frames += 1
+			continue
+
+		remote_inputs[frame] = input_data.duplicate(true)
+		newly_inserted.append({
+			"frame": frame,
+			"input": input_data.duplicate(true),
+		})
+
+		if is_redundant:
+			recovered_missing_frames += 1
+
+	last_remote_frame = maxi(
+		last_remote_frame,
+		newest_valid_frame
+	)
+
+	_advance_remote_confirmed_through()
+	_clear_resolved_repair_request()
+
+	var earliest_mismatch: int = -1
+
+	for record: Dictionary in newly_inserted:
+		var frame: int = int(record.get("frame", -1))
+
+		if frame >= current_frame:
+			continue
+
+		if not predicted_remote_inputs.has(frame):
+			continue
+
+		var predicted: Dictionary = predicted_remote_inputs[frame]
+		var input_data: Dictionary = record.get("input", {})
+
+		if not _inputs_equal(predicted, input_data):
+			prediction_misses += 1
+
+			if earliest_mismatch < 0 or frame < earliest_mismatch:
+				earliest_mismatch = frame
+
+	if earliest_mismatch >= 0:
+		if not snapshots.has(earliest_mismatch):
+			_enter_history_exhaustion(earliest_mismatch)
+			return
+
+		_rollback_and_replay(earliest_mismatch)
+
+	_send_newly_confirmed_checksums()
+
+
+func _on_input_repair_request_received(
+	frame: int,
+	requester_player_id: int
+) -> void:
+	if requester_player_id == player_id:
+		return
+
+	repair_requests_received += 1
+
+	if frame < 0:
+		push_error("[Rollback] Invalid negative repair request frame.")
+		return
+
+	if transport == null or not transport.has_method(
+		"send_input_repair_response"
+	):
+		return
+
+	if not local_inputs.has(frame):
+		push_error(
+			"[Rollback] REPAIR UNAVAILABLE frame=%d current_frame=%d max_history=%d"
+			% [frame, current_frame, MAX_ROLLBACK_FRAMES]
+		)
+		transport.send_input_repair_response(
+			frame,
+			player_id,
+			{},
+			false
+		)
+		repair_responses_sent += 1
+		return
+
+	transport.send_input_repair_response(
+		frame,
+		player_id,
+		local_inputs[frame].duplicate(true),
+		true
+	)
+	repair_responses_sent += 1
+
+
+func _on_input_repair_response_received(
+	frame: int,
+	responder_player_id: int,
+	input_data: Dictionary,
+	available: bool
+) -> void:
+	if responder_player_id == player_id:
+		return
+
+	repair_responses_received += 1
+
+	if frame < 0:
+		push_error("[Rollback] Invalid negative repair response frame.")
+		return
+
+	if not available:
+		_repair_unavailable_frame = frame
+		push_error(
+			"[Rollback] REMOTE REPAIR UNAVAILABLE frame=%d current_frame=%d"
+			% [frame, current_frame]
+		)
+		return
+
+	var records: Array[Dictionary] = []
+	_append_valid_input_record(records, frame, input_data, false)
+
+	if records.is_empty():
+		return
+
+	_merge_remote_input_records(records)
+
+	if remote_inputs.has(frame):
+		var merged_input: Dictionary = remote_inputs[frame]
+		if _inputs_equal(merged_input, input_data):
+			last_repair_recovered_frame = frame
+
+
 func _on_packet_received(packet: Dictionary) -> void:
 	var packet_type: String = str(
 		packet.get("type", "")
@@ -804,102 +1053,7 @@ func _on_packet_received(packet: Dictionary) -> void:
 		return
 
 	packets_received += 1
-	records.sort_custom(_input_record_less)
-
-	var newest_valid_frame: int = -1
-	var newly_inserted: Array[Dictionary] = []
-
-	for record: Dictionary in records:
-		var frame: int = int(record.get("frame", -1))
-		var input_data: Dictionary = record.get("input", {})
-		var is_redundant: bool = bool(
-			record.get("redundant", false)
-		)
-
-		newest_valid_frame = maxi(newest_valid_frame, frame)
-
-		if is_redundant:
-			redundant_frames_received += 1
-
-		if remote_inputs.has(frame):
-			var existing_input: Dictionary = remote_inputs[frame]
-
-			if _inputs_equal(existing_input, input_data):
-				duplicate_input_frames += 1
-			else:
-				_report_input_mutation(frame)
-
-			continue
-
-		if frame <= remote_confirmed_through:
-			duplicate_input_frames += 1
-			continue
-
-		remote_inputs[frame] = input_data.duplicate(true)
-		newly_inserted.append({
-			"frame": frame,
-			"input": input_data.duplicate(true),
-		})
-
-		if is_redundant:
-			recovered_missing_frames += 1
-
-	last_remote_frame = maxi(
-		last_remote_frame,
-		newest_valid_frame
-	)
-
-	_advance_remote_confirmed_through()
-
-	# =================================================
-	# IMPORTANT FIX:
-	#
-	# Do NOT compare checksum here yet.
-	#
-	# First determine whether this newly received real
-	# input invalidates a prediction.
-	#
-	# If so, rollback/replay must finish BEFORE we
-	# compare the checksum for this frame.
-	# =================================================
-
-	var earliest_mismatch: int = -1
-
-	for record: Dictionary in newly_inserted:
-		var frame: int = int(record.get("frame", -1))
-
-		if frame >= current_frame:
-			continue
-
-		if not predicted_remote_inputs.has(frame):
-			continue
-
-		var predicted: Dictionary = predicted_remote_inputs[frame]
-		var input_data: Dictionary = record.get("input", {})
-
-		if not _inputs_equal(predicted, input_data):
-			prediction_misses += 1
-
-			if earliest_mismatch < 0 or frame < earliest_mismatch:
-				earliest_mismatch = frame
-
-	if earliest_mismatch >= 0:
-		if not snapshots.has(earliest_mismatch):
-			_enter_history_exhaustion(earliest_mismatch)
-			return
-
-		# Correct all newly merged frames in one replay.
-		_rollback_and_replay(earliest_mismatch)
-
-	# =================================================
-	# NOW compare.
-	#
-	# At this point, if rollback was required, the
-	# historical state/checksum has already been
-	# recomputed using the real remote input.
-	# =================================================
-
-	_send_newly_confirmed_checksums()
+	_merge_remote_input_records(records)
 
 
 # =================================================

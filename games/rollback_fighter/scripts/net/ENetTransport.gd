@@ -2,6 +2,13 @@ extends Node
 class_name ENetTransport
 
 signal packet_received(packet: Dictionary)
+signal input_repair_request_received(frame: int, player_id: int)
+signal input_repair_response_received(
+	frame: int,
+	player_id: int,
+	input_data: Dictionary,
+	available: bool
+)
 signal connected()
 signal disconnected()
 signal connection_failed(reason: String)
@@ -98,9 +105,77 @@ func send_packet(packet: Dictionary) -> void:
 		_rpc_receive_packet.rpc_id(1, packet)
 
 
+func send_input_repair_request(frame: int, player_id: int) -> void:
+	if multiplayer.multiplayer_peer == null or not is_connected:
+		return
+
+	if is_host:
+		if remote_peer_id == 0:
+			return
+		_rpc_receive_input_repair_request.rpc_id(
+			remote_peer_id,
+			frame,
+			player_id
+		)
+	else:
+		_rpc_receive_input_repair_request.rpc_id(1, frame, player_id)
+
+
+func send_input_repair_response(
+	frame: int,
+	player_id: int,
+	input_data: Dictionary,
+	available: bool
+) -> void:
+	if multiplayer.multiplayer_peer == null or not is_connected:
+		return
+
+	if is_host:
+		if remote_peer_id == 0:
+			return
+		_rpc_receive_input_repair_response.rpc_id(
+			remote_peer_id,
+			frame,
+			player_id,
+			input_data,
+			available
+		)
+	else:
+		_rpc_receive_input_repair_response.rpc_id(
+			1,
+			frame,
+			player_id,
+			input_data,
+			available
+		)
+
+
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _rpc_receive_packet(packet: Dictionary) -> void:
 	_queue_or_emit_packet(packet)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_input_repair_request(
+	frame: int,
+	player_id: int
+) -> void:
+	input_repair_request_received.emit(frame, player_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_input_repair_response(
+	frame: int,
+	player_id: int,
+	input_data: Dictionary,
+	available: bool
+) -> void:
+	input_repair_response_received.emit(
+		frame,
+		player_id,
+		input_data,
+		available
+	)
 
 
 func _queue_or_emit_packet(packet: Dictionary) -> void:

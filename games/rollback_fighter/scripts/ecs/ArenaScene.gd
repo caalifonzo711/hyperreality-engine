@@ -299,6 +299,12 @@ func _print_benchmark_results() -> void:
 	print("RedundantFramesReceived: %d" % int(rollback_session.redundant_frames_received))
 	print("RecoveredMissingFrames: %d" % int(rollback_session.recovered_missing_frames))
 	print("DuplicateInputFrames: %d" % int(rollback_session.duplicate_input_frames))
+	print("RepairRequestsSent: %d" % int(rollback_session.repair_requests_sent))
+	print("RepairRequestsReceived: %d" % int(rollback_session.repair_requests_received))
+	print("RepairResponsesSent: %d" % int(rollback_session.repair_responses_sent))
+	print("RepairResponsesReceived: %d" % int(rollback_session.repair_responses_received))
+	print("LastRepairRequestedFrame: %d" % int(rollback_session.last_repair_requested_frame))
+	print("LastRepairRecoveredFrame: %d" % int(rollback_session.last_repair_recovered_frame))
 	print("RemoteConfirmedThrough: %d" % int(rollback_session.remote_confirmed_through))
 	print("ConfirmationLag: %d" % int(rollback_session.get_confirmation_lag()))
 	print("EarliestMissingRemoteFrame: %d" % int(rollback_session.get_earliest_missing_remote_frame()))
@@ -408,6 +414,8 @@ func _update_rollback_debug_hud() -> void:
 			"PredictionLead=%d | Max=%d | Limit=%d\n" +
 			"LeadStalled=%s | StallTicks=%d\n" +
 			"Redundant=%d | Recovered=%d | Duplicates=%d\n" +
+			"Repair Req S/R=%d/%d | Resp S/R=%d/%d\n" +
+			"Last Repair Requested=%d | Recovered=%d\n" +
 			"ConfirmedThrough=%d | ConfirmationLag=%d | Missing=%d\n" +
 			"OldestSnapshot=%d | HistoryExhausted=%s | Frame=%d\n" +
 			"Rollback count=%d | Max depth=%d | Misses=%d\n" +
@@ -430,6 +438,12 @@ func _update_rollback_debug_hud() -> void:
 			int(rollback_session.redundant_frames_received),
 			int(rollback_session.recovered_missing_frames),
 			int(rollback_session.duplicate_input_frames),
+			int(rollback_session.repair_requests_sent),
+			int(rollback_session.repair_requests_received),
+			int(rollback_session.repair_responses_sent),
+			int(rollback_session.repair_responses_received),
+			int(rollback_session.last_repair_requested_frame),
+			int(rollback_session.last_repair_recovered_frame),
 			int(rollback_session.remote_confirmed_through),
 			int(rollback_session.get_confirmation_lag()),
 			int(rollback_session.get_earliest_missing_remote_frame()),
