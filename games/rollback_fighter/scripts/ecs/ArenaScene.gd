@@ -639,11 +639,11 @@ func _update_rollback_debug_hud() -> void:
 		return
 
 	if debug_tick_label:
-		debug_tick_label.text = "Frame: %d | Player ID: %d | Gap: %d | Lead: %d" % [
+		debug_tick_label.text = "LocalFrame=%d | PlayerID=%d | PredictionLead=%d | RollbackCount=%d" % [
 			int(rollback_session.current_frame),
 			local_player_id,
-			_frame_gap(),
-			int(rollback_session.get_prediction_lead())
+			int(rollback_session.get_prediction_lead()),
+			int(rollback_session.rollback_count)
 		]
 
 	var mode_text := "ENet"
@@ -658,7 +658,9 @@ func _update_rollback_debug_hud() -> void:
 		debug_replay_label.text = (
 			"Mode=%s | Connected=%s | Bot=%s\n" +
 			"Delay=%d | Jitter=%d | BenchmarkDone=%s\n" +
-			"Packets=%d | LastRemoteFrame=%d | Gap=%d\n" +
+			"Packets=%d | LastRemoteInputFrame=%d | LastRemoteSimFrame=%d\n" +
+			"RemoteConfirmedThrough=%d | PeerConfirmedLocalThrough=%d | FinalizedThrough=%d\n" +
+			"RawFrameOffset=%.2f | FilteredFrameOffset=%.2f | SyncRTTFrames=%d | SyncSampleAgeFrames=%d\n" +
 			"PredictionLead=%d | Max=%d | Limit=%d\n" +
 			"LeadStalled=%s | StallTicks=%d\n" +
 			"Redundant=%d | Recovered=%d | Duplicates=%d\n" +
@@ -676,8 +678,15 @@ func _update_rollback_debug_hud() -> void:
 			BENCHMARK_JITTER_FRAMES,
 			str(benchmark_complete),
 			int(rollback_session.packets_received),
-			int(rollback_session.last_remote_frame),
-			_frame_gap(),
+			int(rollback_session.last_remote_input_frame),
+			int(rollback_session.last_remote_sim_frame),
+			int(rollback_session.remote_confirmed_through),
+			int(rollback_session.peer_confirmed_local_through),
+			int(rollback_session.finalized_through),
+			float(rollback_session.raw_estimated_frame_offset),
+			float(rollback_session.filtered_estimated_frame_offset),
+			int(rollback_session.last_sync_rtt_frames),
+			int(rollback_session.last_sync_sample_age_frames),
 			int(rollback_session.get_prediction_lead()),
 			int(rollback_session.max_prediction_lead),
 			int(rollback_session.get_prediction_lead_limit()),

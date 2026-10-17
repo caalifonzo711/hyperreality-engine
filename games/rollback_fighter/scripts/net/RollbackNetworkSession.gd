@@ -6,6 +6,11 @@ const MAX_ROLLBACK_FRAMES := 60
 const MAX_PREDICTION_FRAMES := 8
 const INPUT_REDUNDANCY_FRAMES := 12
 const REPAIR_REQUEST_RETRY_TICKS := 30
+const SYNC_SAMPLE_WINDOW := 31
+const SYNC_EWMA_ALPHA := 0.1
+const SYNC_MAX_RTT_FRAMES := 60
+const SYNC_MAX_ABS_OFFSET_FRAMES := 60.0
+const SYNC_MAX_MEDIAN_DEVIATION_FRAMES := 12.0
 const REPAIR_REQUEST_MAX_AGE := (
 	MAX_ROLLBACK_FRAMES - MAX_PREDICTION_FRAMES - 1
 )
@@ -24,7 +29,16 @@ var rollback_count: int = 0
 var max_rollback_depth: int = 0
 var prediction_misses: int = 0
 var packets_received: int = 0
+# Compatibility frontier used by the existing prediction-lead behavior.
 var last_remote_frame: int = -1
+var last_remote_input_frame: int = -1
+var last_remote_sim_frame: int = -1
+var peer_confirmed_local_through: int = -1
+var finalized_through: int = -1
+var raw_estimated_frame_offset: float = 0.0
+var filtered_estimated_frame_offset: float = 0.0
+var last_sync_rtt_frames: int = -1
+var last_sync_sample_age_frames: int = -1
 var max_prediction_lead: int = 0
 var lead_stalled: bool = false
 var lead_stall_ticks: int = 0
@@ -51,6 +65,12 @@ var _repair_tick: int = 0
 var _pending_repair_frame: int = -1
 var _next_repair_request_tick: int = 0
 var _repair_unavailable_frame: int = -1
+var _next_sync_sequence: int = 0
+var _last_received_sync_sequence: int = -1
+var _last_received_sync_receive_frame: int = -1
+var _sync_sent_frames: Dictionary = {}
+var _sync_offset_samples: Array[float] = []
+var _has_filtered_sync_sample: bool = false
 
 
 # =================================================
@@ -141,6 +161,14 @@ func reset_session() -> void:
 	prediction_misses = 0
 	packets_received = 0
 	last_remote_frame = -1
+	last_remote_input_frame = -1
+	last_remote_sim_frame = -1
+	peer_confirmed_local_through = -1
+	finalized_through = -1
+	raw_estimated_frame_offset = 0.0
+	filtered_estimated_frame_offset = 0.0
+	last_sync_rtt_frames = -1
+	last_sync_sample_age_frames = -1
 	max_prediction_lead = 0
 	lead_stalled = false
 	lead_stall_ticks = 0
@@ -163,6 +191,12 @@ func reset_session() -> void:
 	_pending_repair_frame = -1
 	_next_repair_request_tick = 0
 	_repair_unavailable_frame = -1
+	_next_sync_sequence = 0
+	_last_received_sync_sequence = -1
+	_last_received_sync_receive_frame = -1
+	_sync_sent_frames.clear()
+	_sync_offset_samples.clear()
+	_has_filtered_sync_sample = false
 
 	local_checksum = 0
 	remote_checksum = 0
@@ -233,6 +267,151 @@ func get_oldest_retained_snapshot() -> int:
 			oldest = frame
 
 	return oldest
+
+
+func _median(values: Array[float]) -> float:
+	if values.is_empty():
+		return 0.0
+
+	var sorted_values: Array[float] = values.duplicate()
+	sorted_values.sort()
+	var middle: int = sorted_values.size() / 2
+
+	if sorted_values.size() % 2 == 1:
+		return sorted_values[middle]
+
+	return (
+		(sorted_values[middle - 1] + sorted_values[middle])
+		* 0.5
+	)
+
+
+func _prune_sync_send_history(through_sequence: int) -> void:
+	for sequence_value: Variant in _sync_sent_frames.keys():
+		var sequence: int = int(sequence_value)
+		if sequence <= through_sequence:
+			_sync_sent_frames.erase(sequence)
+
+
+func _update_finalized_through() -> void:
+	var candidate: int = mini(
+		remote_confirmed_through,
+		mini(
+			peer_confirmed_local_through,
+			current_frame - 1
+		)
+	)
+	finalized_through = maxi(finalized_through, candidate)
+
+
+func _record_sync_sample(
+	remote_sim_frame: int,
+	echo_sequence: int,
+	echo_receive_frame: int
+) -> void:
+	if not _sync_sent_frames.has(echo_sequence):
+		return
+
+	var local_send_frame: int = int(
+		_sync_sent_frames[echo_sequence]
+	)
+	var local_receive_frame: int = current_frame
+	var local_elapsed: int = local_receive_frame - local_send_frame
+	var remote_hold: int = remote_sim_frame - echo_receive_frame
+
+	last_sync_sample_age_frames = local_elapsed
+
+	if local_elapsed < 0 or remote_hold < 0:
+		return
+
+	var rtt_frames: int = local_elapsed - remote_hold
+	if rtt_frames < 0 or rtt_frames > SYNC_MAX_RTT_FRAMES:
+		return
+
+	var raw_offset: float = 0.5 * float(
+		(echo_receive_frame - local_send_frame)
+		+ (remote_sim_frame - local_receive_frame)
+	)
+
+	if absf(raw_offset) > SYNC_MAX_ABS_OFFSET_FRAMES:
+		return
+
+	if _sync_offset_samples.size() >= 5:
+		var recent_median: float = _median(_sync_offset_samples)
+		if absf(raw_offset - recent_median) > SYNC_MAX_MEDIAN_DEVIATION_FRAMES:
+			return
+
+	raw_estimated_frame_offset = raw_offset
+	last_sync_rtt_frames = rtt_frames
+	_sync_offset_samples.append(raw_offset)
+
+	while _sync_offset_samples.size() > SYNC_SAMPLE_WINDOW:
+		_sync_offset_samples.pop_front()
+
+	var robust_offset: float = _median(_sync_offset_samples)
+	if not _has_filtered_sync_sample:
+		filtered_estimated_frame_offset = robust_offset
+		_has_filtered_sync_sample = true
+	else:
+		filtered_estimated_frame_offset = lerpf(
+			filtered_estimated_frame_offset,
+			robust_offset,
+			SYNC_EWMA_ALPHA
+		)
+
+	_prune_sync_send_history(echo_sequence)
+
+
+func _handle_sync_telemetry(packet: Dictionary) -> void:
+	var sim_frame_value: Variant = packet.get("sim_frame", null)
+	var sync_sequence_value: Variant = packet.get("sync_sequence", null)
+	var echo_sequence_value: Variant = packet.get("echo_sync_sequence", null)
+	var echo_receive_value: Variant = packet.get("echo_receive_frame", null)
+	var confirmed_value: Variant = packet.get(
+		"confirmed_remote_through",
+		null
+	)
+
+	if (
+		typeof(sim_frame_value) != TYPE_INT
+		or typeof(sync_sequence_value) != TYPE_INT
+		or typeof(echo_sequence_value) != TYPE_INT
+		or typeof(echo_receive_value) != TYPE_INT
+		or typeof(confirmed_value) != TYPE_INT
+	):
+		return
+
+	var remote_sim_frame: int = int(sim_frame_value)
+	var sync_sequence: int = int(sync_sequence_value)
+	var echo_sequence: int = int(echo_sequence_value)
+	var echo_receive_frame: int = int(echo_receive_value)
+	var peer_confirmed: int = int(confirmed_value)
+
+	if remote_sim_frame < 0 or sync_sequence < 0:
+		return
+
+	last_remote_sim_frame = maxi(
+		last_remote_sim_frame,
+		remote_sim_frame
+	)
+
+	if peer_confirmed >= -1:
+		peer_confirmed_local_through = maxi(
+			peer_confirmed_local_through,
+			peer_confirmed
+		)
+		_update_finalized_through()
+
+	if sync_sequence > _last_received_sync_sequence:
+		_last_received_sync_sequence = sync_sequence
+		_last_received_sync_receive_frame = current_frame
+
+	if echo_sequence >= 0 and echo_receive_frame >= 0:
+		_record_sync_sample(
+			remote_sim_frame,
+			echo_sequence,
+			echo_receive_frame
+		)
 
 
 func _empty_input() -> Dictionary:
@@ -410,6 +589,8 @@ func _advance_remote_confirmed_through() -> void:
 	while remote_inputs.has(next_frame):
 		remote_confirmed_through = next_frame
 		next_frame += 1
+
+	_update_finalized_through()
 
 
 func _send_newly_confirmed_checksums() -> void:
@@ -671,12 +852,22 @@ func tick(local_input: Dictionary) -> void:
 	# =================================================
 
 	if transport and transport.has_method("send_packet"):
+		var sync_sequence: int = _next_sync_sequence
+		_next_sync_sequence += 1
+		_sync_sent_frames[sync_sequence] = current_frame
+		_prune_sync_send_history(_next_sync_sequence - 257)
+
 		transport.send_packet({
 			"type": "input",
 			"frame": input_frame,
 			"player_id": player_id,
 			"input": latched_local_input.duplicate(true),
 			"history": _build_input_history(input_frame),
+			"sim_frame": current_frame,
+			"sync_sequence": sync_sequence,
+			"echo_sync_sequence": _last_received_sync_sequence,
+			"echo_receive_frame": _last_received_sync_receive_frame,
+			"confirmed_remote_through": remote_confirmed_through,
 		})
 
 	var prediction_lead: int = get_prediction_lead()
@@ -728,6 +919,7 @@ func tick(local_input: Dictionary) -> void:
 	_record_local_checksum(current_frame)
 
 	current_frame += 1
+	_update_finalized_through()
 	_send_newly_confirmed_checksums()
 
 
@@ -888,6 +1080,10 @@ func _merge_remote_input_records(records: Array[Dictionary]) -> void:
 		last_remote_frame,
 		newest_valid_frame
 	)
+	last_remote_input_frame = maxi(
+		last_remote_input_frame,
+		newest_valid_frame
+	)
 
 	_advance_remote_confirmed_through()
 	_clear_resolved_repair_request()
@@ -1031,6 +1227,8 @@ func _on_packet_received(packet: Dictionary) -> void:
 	# Ignore echoed local packets.
 	if int(packet.get("player_id", -1)) == player_id:
 		return
+
+	_handle_sync_telemetry(packet)
 
 	var records: Array[Dictionary] = []
 	_append_valid_input_record(
