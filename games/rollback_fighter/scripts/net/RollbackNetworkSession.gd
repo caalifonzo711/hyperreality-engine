@@ -11,6 +11,10 @@ const SYNC_EWMA_ALPHA := 0.1
 const SYNC_MAX_RTT_FRAMES := 60
 const SYNC_MAX_ABS_OFFSET_FRAMES := 60.0
 const SYNC_MAX_MEDIAN_DEVIATION_FRAMES := 12.0
+const SOFT_SYNC_ENTER_ADVANTAGE := 2.0
+const SOFT_SYNC_EXIT_ADVANTAGE := 1.0
+const SOFT_SYNC_REQUIRED_SAMPLES := 5
+const SOFT_SYNC_YIELD_INTERVAL := 10
 const REPAIR_REQUEST_MAX_AGE := (
 	MAX_ROLLBACK_FRAMES - MAX_PREDICTION_FRAMES - 1
 )
@@ -39,6 +43,10 @@ var raw_estimated_frame_offset: float = 0.0
 var filtered_estimated_frame_offset: float = 0.0
 var last_sync_rtt_frames: int = -1
 var last_sync_sample_age_frames: int = -1
+var soft_sync_active: bool = false
+var soft_sync_ahead_samples: int = 0
+var soft_sync_yield_ticks: int = 0
+var soft_sync_yield_cooldown: int = 0
 var max_prediction_lead: int = 0
 var lead_stalled: bool = false
 var lead_stall_ticks: int = 0
@@ -169,6 +177,10 @@ func reset_session() -> void:
 	filtered_estimated_frame_offset = 0.0
 	last_sync_rtt_frames = -1
 	last_sync_sample_age_frames = -1
+	soft_sync_active = false
+	soft_sync_ahead_samples = 0
+	soft_sync_yield_ticks = 0
+	soft_sync_yield_cooldown = 0
 	max_prediction_lead = 0
 	lead_stalled = false
 	lead_stall_ticks = 0
@@ -240,6 +252,10 @@ func get_prediction_lead() -> int:
 
 func get_prediction_lead_limit() -> int:
 	return MAX_PREDICTION_FRAMES
+
+
+func get_local_frame_advantage() -> float:
+	return -filtered_estimated_frame_offset
 
 
 func get_confirmation_lag() -> int:
@@ -359,7 +375,41 @@ func _record_sync_sample(
 			SYNC_EWMA_ALPHA
 		)
 
+	_update_soft_sync_state()
 	_prune_sync_send_history(echo_sequence)
+
+
+func _update_soft_sync_state() -> void:
+	var local_advantage: float = get_local_frame_advantage()
+
+	if soft_sync_active and local_advantage < SOFT_SYNC_EXIT_ADVANTAGE:
+		soft_sync_active = false
+		soft_sync_ahead_samples = 0
+		return
+
+	if local_advantage >= SOFT_SYNC_ENTER_ADVANTAGE:
+		soft_sync_ahead_samples += 1
+	else:
+		soft_sync_ahead_samples = 0
+
+	if (
+		not soft_sync_active
+		and soft_sync_ahead_samples >= SOFT_SYNC_REQUIRED_SAMPLES
+	):
+		soft_sync_active = true
+
+
+func _advance_soft_sync_cooldown() -> void:
+	if soft_sync_yield_cooldown > 0:
+		soft_sync_yield_cooldown -= 1
+
+
+func _should_soft_sync_yield() -> bool:
+	return (
+		soft_sync_active
+		and soft_sync_ahead_samples >= SOFT_SYNC_REQUIRED_SAMPLES
+		and soft_sync_yield_cooldown <= 0
+	)
 
 
 func _handle_sync_telemetry(packet: Dictionary) -> void:
@@ -880,11 +930,19 @@ func tick(local_input: Dictionary) -> void:
 		prediction_lead >= MAX_PREDICTION_FRAMES
 	)
 
+	if history_exhausted:
+		return
+
 	if lead_stalled:
 		lead_stall_ticks += 1
 		return
 
-	if history_exhausted:
+	_advance_soft_sync_cooldown()
+
+	if _should_soft_sync_yield():
+		soft_sync_yield_ticks += 1
+		soft_sync_yield_cooldown = SOFT_SYNC_YIELD_INTERVAL
+		soft_sync_ahead_samples = 0
 		return
 
 	if not _cleanup_old_history():

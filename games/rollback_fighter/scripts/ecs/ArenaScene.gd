@@ -461,6 +461,11 @@ func _print_benchmark_results() -> void:
 	print("LeadLimit: %d" % int(rollback_session.get_prediction_lead_limit()))
 	print("LeadStalled: %s" % str(rollback_session.lead_stalled))
 	print("LeadStallTicks: %d" % int(rollback_session.lead_stall_ticks))
+	print("SoftSyncActive: %s" % str(rollback_session.soft_sync_active))
+	print("SoftSyncAheadSamples: %d" % int(rollback_session.soft_sync_ahead_samples))
+	print("SoftSyncYieldTicks: %d" % int(rollback_session.soft_sync_yield_ticks))
+	print("SoftSyncYieldCooldown: %d" % int(rollback_session.soft_sync_yield_cooldown))
+	print("LocalFrameAdvantage: %.2f" % float(rollback_session.get_local_frame_advantage()))
 	print("RedundantFramesReceived: %d" % int(rollback_session.redundant_frames_received))
 	print("RecoveredMissingFrames: %d" % int(rollback_session.recovered_missing_frames))
 	print("DuplicateInputFrames: %d" % int(rollback_session.duplicate_input_frames))
@@ -661,6 +666,8 @@ func _update_rollback_debug_hud() -> void:
 			"Packets=%d | LastRemoteInputFrame=%d | LastRemoteSimFrame=%d\n" +
 			"RemoteConfirmedThrough=%d | PeerConfirmedLocalThrough=%d | FinalizedThrough=%d\n" +
 			"RawFrameOffset=%.2f | FilteredFrameOffset=%.2f | SyncRTTFrames=%d | SyncSampleAgeFrames=%d\n" +
+			"LocalFrameAdvantage=%.2f | SoftSyncActive=%s | AheadSamples=%d\n" +
+			"SoftSyncYieldTicks=%d | SoftSyncYieldCooldown=%d\n" +
 			"PredictionLead=%d | Max=%d | Limit=%d\n" +
 			"LeadStalled=%s | StallTicks=%d\n" +
 			"Redundant=%d | Recovered=%d | Duplicates=%d\n" +
@@ -687,6 +694,11 @@ func _update_rollback_debug_hud() -> void:
 			float(rollback_session.filtered_estimated_frame_offset),
 			int(rollback_session.last_sync_rtt_frames),
 			int(rollback_session.last_sync_sample_age_frames),
+			float(rollback_session.get_local_frame_advantage()),
+			str(rollback_session.soft_sync_active),
+			int(rollback_session.soft_sync_ahead_samples),
+			int(rollback_session.soft_sync_yield_ticks),
+			int(rollback_session.soft_sync_yield_cooldown),
 			int(rollback_session.get_prediction_lead()),
 			int(rollback_session.max_prediction_lead),
 			int(rollback_session.get_prediction_lead_limit()),
