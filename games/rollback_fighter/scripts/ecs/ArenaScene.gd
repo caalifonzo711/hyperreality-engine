@@ -92,11 +92,19 @@ const HURTBOX_FILL_COLOR := Color(0.15, 0.45, 1.0, 0.22)
 const HURTBOX_LINE_COLOR := Color(0.25, 0.65, 1.0, 0.95)
 const HITBOX_FILL_COLOR := Color(1.0, 0.1, 0.1, 0.28)
 const HITBOX_LINE_COLOR := Color(1.0, 0.2, 0.2, 1.0)
+const RENDER_CORRECTION_MAX_DISTANCE := 18.0
+const RENDER_CORRECTION_FRAMES := 3
 
 @export var show_runtime_combat_boxes: bool = true
 
 var _lean_vis_x: float = 0.0
 var _combat_box_overlay: Node2D = null
+var _remote_render_correction_active: bool = false
+var _remote_render_correction_initial_error: Vector2 = Vector2.ZERO
+var _remote_render_correction_error: Vector2 = Vector2.ZERO
+var _remote_render_correction_frames_remaining: int = 0
+var _remote_render_correction_snap_count: int = 0
+var _remote_render_correction_smooth_count: int = 0
 
 
 func _ready() -> void:
@@ -161,6 +169,10 @@ func _ready() -> void:
 	add_child(rollback_session)
 	rollback_session.setup(adapter, transport, local_player_id)
 	rollback_session.input_delay_frames = BENCHMARK_INPUT_DELAY_FRAMES
+	if rollback_session.has_signal("rollback_correction_applied"):
+		rollback_session.rollback_correction_applied.connect(
+			_on_rollback_correction_applied
+		)
 	
 	if hud:
 		hud.set("p1_state", player_state)
@@ -227,6 +239,7 @@ func _physics_process(delta: float) -> void:
 func _on_frame_pre_draw() -> void:
 	_last_render_physics_ticks = _physics_ticks_since_last_render
 	_physics_ticks_since_last_render = 0
+	_advance_remote_render_correction()
 	_update_visual_diagnostic_hud()
 
 
@@ -466,6 +479,11 @@ func _print_benchmark_results() -> void:
 	print("SoftSyncYieldTicks: %d" % int(rollback_session.soft_sync_yield_ticks))
 	print("SoftSyncYieldCooldown: %d" % int(rollback_session.soft_sync_yield_cooldown))
 	print("LocalFrameAdvantage: %.2f" % float(rollback_session.get_local_frame_advantage()))
+	print("RenderCorrectionActive: %s" % str(_remote_render_correction_active))
+	print("RenderCorrectionErrorX: %.2f" % _remote_render_correction_error.x)
+	print("RenderCorrectionFramesRemaining: %d" % _remote_render_correction_frames_remaining)
+	print("CorrectionSnapCount: %d" % _remote_render_correction_snap_count)
+	print("CorrectionSmoothCount: %d" % _remote_render_correction_smooth_count)
 	print("RedundantFramesReceived: %d" % int(rollback_session.redundant_frames_received))
 	print("RecoveredMissingFrames: %d" % int(rollback_session.recovered_missing_frames))
 	print("DuplicateInputFrames: %d" % int(rollback_session.duplicate_input_frames))
@@ -566,12 +584,215 @@ func _print_stress_verdict() -> void:
 
 
 func _update_visuals() -> void:
+	_apply_fighter_render_positions()
+	if _combat_box_overlay:
+		_combat_box_overlay.queue_redraw()
+
+
+func _get_remote_fighter_state() -> PlayerState:
+	return opponent_state if local_player_id == 1 else player_state
+
+
+func _get_remote_fighter_placeholder() -> Node2D:
+	return p2_placeholder if local_player_id == 1 else p1_placeholder
+
+
+func _get_remote_snapshot_key() -> String:
+	return "p2" if local_player_id == 1 else "p1"
+
+
+func _apply_fighter_render_positions() -> void:
 	if p1_placeholder:
 		p1_placeholder.position = player_state.position
 	if p2_placeholder:
 		p2_placeholder.position = opponent_state.position
-	if _combat_box_overlay:
+
+	if not _remote_render_correction_active:
+		return
+
+	var remote_state: PlayerState = _get_remote_fighter_state()
+	var remote_placeholder: Node2D = _get_remote_fighter_placeholder()
+	if remote_state != null and remote_placeholder != null:
+		remote_placeholder.position = (
+			remote_state.position
+			+ _remote_render_correction_error
+		)
+
+
+func _snapshot_position(fighter_snapshot: Dictionary) -> Vector2:
+	return Vector2(
+		float(fighter_snapshot.get("x", 0.0)),
+		float(fighter_snapshot.get("y", 0.0))
+	)
+
+
+func _is_attack_state(state: int) -> bool:
+	return state in [
+		PlayerState.MoveState.STARTUP,
+		PlayerState.MoveState.ACTIVE,
+		PlayerState.MoveState.RECOVERY,
+	]
+
+
+func _rollback_correction_requires_snap(
+	before_fighter: Dictionary,
+	after_fighter: Dictionary,
+	before_snapshot: Dictionary,
+	after_snapshot: Dictionary
+) -> bool:
+	var before_state: int = int(before_fighter.get("st", PlayerState.MoveState.IDLE))
+	var after_state: int = int(after_fighter.get("st", PlayerState.MoveState.IDLE))
+
+	var attack_transition: bool = (
+		before_state != after_state
+		and (_is_attack_state(before_state) or _is_attack_state(after_state))
+	)
+	attack_transition = attack_transition or (
+		int(before_fighter.get("ak", PlayerState.AttackKind.NONE))
+		!= int(after_fighter.get("ak", PlayerState.AttackKind.NONE))
+	) or (
+		int(before_fighter.get("aid", 0))
+		!= int(after_fighter.get("aid", 0))
+	)
+
+	var involves_block: bool = (
+		before_state == PlayerState.MoveState.BLOCK
+		or after_state == PlayerState.MoveState.BLOCK
+		or bool(before_fighter.get("blk", false))
+		or bool(after_fighter.get("blk", false))
+	)
+	var involves_dodge: bool = (
+		before_state == PlayerState.MoveState.DODGE
+		or after_state == PlayerState.MoveState.DODGE
+		or bool(before_fighter.get("inv", false))
+		or bool(after_fighter.get("inv", false))
+	)
+	var involves_hurt_or_death: bool = (
+		before_state == PlayerState.MoveState.HURT
+		or after_state == PlayerState.MoveState.HURT
+		or before_state == PlayerState.MoveState.DEAD
+		or after_state == PlayerState.MoveState.DEAD
+	)
+	var facing_changed: bool = (
+		int(before_fighter.get("fa", 1))
+		!= int(after_fighter.get("fa", 1))
+	)
+	var hit_changed: bool = (
+		bool(before_fighter.get("hc", false))
+		!= bool(after_fighter.get("hc", false))
+	) or (
+		int(before_fighter.get("hp", 0))
+		!= int(after_fighter.get("hp", 0))
+	) or (
+		int(before_fighter.get("hurt", 0))
+		!= int(after_fighter.get("hurt", 0))
+	)
+
+	var before_combat: Dictionary = before_snapshot.get("combat", {})
+	var after_combat: Dictionary = after_snapshot.get("combat", {})
+	var hitstop_changed: bool = (
+		int(before_combat.get("hitstop", 0))
+		!= int(after_combat.get("hitstop", 0))
+	)
+
+	return (
+		attack_transition
+		or involves_block
+		or involves_dodge
+		or involves_hurt_or_death
+		or facing_changed
+		or hit_changed
+		or hitstop_changed
+	)
+
+
+func _clear_remote_render_correction() -> void:
+	_remote_render_correction_active = false
+	_remote_render_correction_initial_error = Vector2.ZERO
+	_remote_render_correction_error = Vector2.ZERO
+	_remote_render_correction_frames_remaining = 0
+
+
+func _on_rollback_correction_applied(
+	_from_frame: int,
+	_rollback_depth: int,
+	before_snapshot: Dictionary,
+	after_snapshot: Dictionary
+) -> void:
+	# The overlay redraws from authoritative CombatSystem queries and never
+	# receives the sprite-only correction offset.
+	if _combat_box_overlay != null:
 		_combat_box_overlay.queue_redraw()
+
+	var remote_key: String = _get_remote_snapshot_key()
+	var before_fighter: Dictionary = before_snapshot.get(remote_key, {})
+	var after_fighter: Dictionary = after_snapshot.get(remote_key, {})
+	if before_fighter.is_empty() or after_fighter.is_empty():
+		return
+
+	var before_authoritative: Vector2 = _snapshot_position(before_fighter)
+	var corrected_authoritative: Vector2 = _snapshot_position(after_fighter)
+	if before_authoritative.is_equal_approx(corrected_authoritative):
+		return
+
+	var remote_placeholder: Node2D = _get_remote_fighter_placeholder()
+	if remote_placeholder == null:
+		return
+
+	var visual_error: Vector2 = (
+		remote_placeholder.position
+		- corrected_authoritative
+	)
+	var must_snap: bool = (
+		visual_error.length() > RENDER_CORRECTION_MAX_DISTANCE
+		or _rollback_correction_requires_snap(
+			before_fighter,
+			after_fighter,
+			before_snapshot,
+			after_snapshot
+		)
+	)
+
+	if must_snap:
+		_remote_render_correction_snap_count += 1
+		_clear_remote_render_correction()
+		remote_placeholder.position = corrected_authoritative
+		return
+
+	if visual_error.is_zero_approx():
+		_clear_remote_render_correction()
+		remote_placeholder.position = corrected_authoritative
+		return
+
+	_remote_render_correction_smooth_count += 1
+	_remote_render_correction_active = true
+	_remote_render_correction_initial_error = visual_error
+	_remote_render_correction_error = visual_error
+	_remote_render_correction_frames_remaining = RENDER_CORRECTION_FRAMES
+	remote_placeholder.position = corrected_authoritative + visual_error
+
+
+func _advance_remote_render_correction() -> void:
+	if not _remote_render_correction_active:
+		return
+
+	_remote_render_correction_frames_remaining = maxi(
+		_remote_render_correction_frames_remaining - 1,
+		0
+	)
+	var weight: float = (
+		float(_remote_render_correction_frames_remaining)
+		/ float(RENDER_CORRECTION_FRAMES)
+	)
+	_remote_render_correction_error = (
+		_remote_render_correction_initial_error
+		* weight
+	)
+
+	if _remote_render_correction_frames_remaining <= 0:
+		_clear_remote_render_correction()
+
+	_apply_fighter_render_positions()
 
 
 func _draw_runtime_combat_boxes() -> void:
@@ -778,6 +999,18 @@ func _update_visual_diagnostic_hud() -> void:
 	var p2_visual: Dictionary = _sprite_visual_debug(p2_sprite_debug)
 	var p1_texture_size: Vector2 = p1_visual.get("texture_size", Vector2.ZERO)
 	var p2_texture_size: Vector2 = p2_visual.get("texture_size", Vector2.ZERO)
+	var remote_state: PlayerState = _get_remote_fighter_state()
+	var remote_placeholder: Node2D = _get_remote_fighter_placeholder()
+	var remote_authoritative: Vector2 = (
+		remote_state.position
+		if remote_state != null
+		else Vector2.ZERO
+	)
+	var remote_rendered: Vector2 = (
+		remote_placeholder.position
+		if remote_placeholder != null
+		else Vector2.ZERO
+	)
 
 	debug_pos_label.text = (
 		"SimulationFrame=%d | PhysicsTicksSinceLastRender=%d | FPS=%d\n" +
@@ -785,7 +1018,10 @@ func _update_visual_diagnostic_hud() -> void:
 		"P1 Auth=(%.2f, %.2f) Node=(%.2f, %.2f) Delta=(%.2f, %.2f)\n" +
 		"P1 Anim=%s Frame=%d Texture=(%.0f, %.0f)\n" +
 		"P2 Auth=(%.2f, %.2f) Node=(%.2f, %.2f) Delta=(%.2f, %.2f)\n" +
-		"P2 Anim=%s Frame=%d Texture=(%.0f, %.0f)"
+		"P2 Anim=%s Frame=%d Texture=(%.0f, %.0f)\n" +
+		"RenderCorrectionActive=%s | RenderCorrectionErrorX=%.2f | RenderCorrectionFramesRemaining=%d\n" +
+		"RenderedPosition=(%.2f, %.2f) | AuthoritativePosition=(%.2f, %.2f)\n" +
+		"CorrectionSnapCount=%d | CorrectionSmoothCount=%d"
 	) % [
 		simulation_frame,
 		_last_render_physics_ticks,
@@ -812,6 +1048,15 @@ func _update_visual_diagnostic_hud() -> void:
 		int(p2_visual.get("frame", -1)),
 		p2_texture_size.x,
 		p2_texture_size.y,
+		str(_remote_render_correction_active),
+		_remote_render_correction_error.x,
+		_remote_render_correction_frames_remaining,
+		remote_rendered.x,
+		remote_rendered.y,
+		remote_authoritative.x,
+		remote_authoritative.y,
+		_remote_render_correction_snap_count,
+		_remote_render_correction_smooth_count,
 	]
 
 
@@ -895,6 +1140,9 @@ func _on_start_match_received() -> void:
 		return
 
 	print("[Arena] start_match received. Starting rollback session.")
+	_clear_remote_render_correction()
+	_remote_render_correction_snap_count = 0
+	_remote_render_correction_smooth_count = 0
 	rollback_session.start_session()
 	if _benchmark_enabled():
 		_start_benchmark_timer()

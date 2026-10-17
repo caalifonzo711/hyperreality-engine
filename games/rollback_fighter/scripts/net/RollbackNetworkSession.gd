@@ -1,6 +1,13 @@
 extends Node
 class_name RollbackNetworkSession
 
+signal rollback_correction_applied(
+	from_frame: int,
+	rollback_depth: int,
+	before_snapshot: Dictionary,
+	after_snapshot: Dictionary
+)
+
 const PHYS_DT := 1.0 / 60.0
 const MAX_ROLLBACK_FRAMES := 60
 const MAX_PREDICTION_FRAMES := 8
@@ -1346,6 +1353,10 @@ func _rollback_and_replay(from_frame: int) -> void:
 		rollback_depth
 	)
 
+	# Presentation-only observers use this to distinguish a replay correction
+	# from ordinary forward simulation. Capturing does not mutate game state.
+	var presentation_before_snapshot: Dictionary = adapter.capture()
+
 	# Restore PRE-SIM state for first incorrect frame.
 	adapter.restore(
 		snapshots[from_frame]
@@ -1389,3 +1400,10 @@ func _rollback_and_replay(from_frame: int) -> void:
 		replay_frame += 1
 
 	current_frame = original_current_frame
+
+	rollback_correction_applied.emit(
+		from_frame,
+		rollback_depth,
+		presentation_before_snapshot,
+		adapter.capture()
+	)
