@@ -443,16 +443,13 @@ func _frame_gap() -> int:
 	if rollback_session == null:
 		return 0
 
-	var last_remote := int(rollback_session.last_remote_frame)
-	if last_remote < 0:
-		return 0
-
-	return int(rollback_session.current_frame) - last_remote
+	return int(rollback_session.get_diagnostics().get("frame_gap", 0))
 
 
 func _print_benchmark_results() -> void:
 	if rollback_session == null:
 		return
+	var diagnostics: Dictionary = rollback_session.get_diagnostics()
 
 	print("")
 	print("========== ROLLBACK BENCHMARK RESULT ==========")
@@ -465,56 +462,56 @@ func _print_benchmark_results() -> void:
 	if QA_STRESS_BENCHMARK_ENABLED:
 		print("StressScheduleFrames: %d" % STRESS_SCHEDULE_FRAMES)
 		print("StressDrainFrames: %d" % STRESS_DRAIN_FRAMES)
-	print("Packets: %d" % int(rollback_session.packets_received))
-	print("LastRemoteFrame: %d" % int(rollback_session.last_remote_frame))
-	print("LocalFrame: %d" % int(rollback_session.current_frame))
-	print("FrameGap: %d" % _frame_gap())
-	print("PredictionLead: %d" % int(rollback_session.get_prediction_lead()))
-	print("MaxPredictionLead: %d" % int(rollback_session.max_prediction_lead))
-	print("LeadLimit: %d" % int(rollback_session.get_prediction_lead_limit()))
-	print("LeadStalled: %s" % str(rollback_session.lead_stalled))
-	print("LeadStallTicks: %d" % int(rollback_session.lead_stall_ticks))
-	print("SoftSyncActive: %s" % str(rollback_session.soft_sync_active))
-	print("SoftSyncAheadSamples: %d" % int(rollback_session.soft_sync_ahead_samples))
-	print("SoftSyncYieldTicks: %d" % int(rollback_session.soft_sync_yield_ticks))
-	print("SoftSyncYieldCooldown: %d" % int(rollback_session.soft_sync_yield_cooldown))
-	print("LocalFrameAdvantage: %.2f" % float(rollback_session.get_local_frame_advantage()))
+	print("Packets: %d" % int(diagnostics["packets_received"]))
+	print("LastRemoteFrame: %d" % int(diagnostics["last_remote_frame"]))
+	print("LocalFrame: %d" % int(diagnostics["current_frame"]))
+	print("FrameGap: %d" % int(diagnostics["frame_gap"]))
+	print("PredictionLead: %d" % int(diagnostics["prediction_lead"]))
+	print("MaxPredictionLead: %d" % int(diagnostics["max_prediction_lead"]))
+	print("LeadLimit: %d" % int(diagnostics["prediction_lead_limit"]))
+	print("LeadStalled: %s" % str(diagnostics["lead_stalled"]))
+	print("LeadStallTicks: %d" % int(diagnostics["lead_stall_ticks"]))
+	print("SoftSyncActive: %s" % str(diagnostics["soft_sync_active"]))
+	print("SoftSyncAheadSamples: %d" % int(diagnostics["soft_sync_ahead_samples"]))
+	print("SoftSyncYieldTicks: %d" % int(diagnostics["soft_sync_yield_ticks"]))
+	print("SoftSyncYieldCooldown: %d" % int(diagnostics["soft_sync_yield_cooldown"]))
+	print("LocalFrameAdvantage: %.2f" % float(diagnostics["local_frame_advantage"]))
 	print("RenderCorrectionActive: %s" % str(_remote_render_correction_active))
 	print("RenderCorrectionErrorX: %.2f" % _remote_render_correction_error.x)
 	print("RenderCorrectionFramesRemaining: %d" % _remote_render_correction_frames_remaining)
 	print("CorrectionSnapCount: %d" % _remote_render_correction_snap_count)
 	print("CorrectionSmoothCount: %d" % _remote_render_correction_smooth_count)
-	print("RedundantFramesReceived: %d" % int(rollback_session.redundant_frames_received))
-	print("RecoveredMissingFrames: %d" % int(rollback_session.recovered_missing_frames))
-	print("DuplicateInputFrames: %d" % int(rollback_session.duplicate_input_frames))
-	print("RepairRequestsSent: %d" % int(rollback_session.repair_requests_sent))
-	print("RepairRequestsReceived: %d" % int(rollback_session.repair_requests_received))
-	print("RepairResponsesSent: %d" % int(rollback_session.repair_responses_sent))
-	print("RepairResponsesReceived: %d" % int(rollback_session.repair_responses_received))
-	print("LastRepairRequestedFrame: %d" % int(rollback_session.last_repair_requested_frame))
-	print("LastRepairRecoveredFrame: %d" % int(rollback_session.last_repair_recovered_frame))
-	print("RepairUnavailable: %s" % str(rollback_session.repair_unavailable_error))
-	print("RepairUnavailableCount: %d" % int(rollback_session.repair_unavailable_count))
-	print("RemoteConfirmedThrough: %d" % int(rollback_session.remote_confirmed_through))
-	print("ConfirmationLag: %d" % int(rollback_session.get_confirmation_lag()))
-	print("EarliestMissingRemoteFrame: %d" % int(rollback_session.get_earliest_missing_remote_frame()))
-	print("OldestRetainedSnapshot: %d" % int(rollback_session.get_oldest_retained_snapshot()))
-	print("HistoryExhausted: %s" % str(rollback_session.history_exhausted))
-	print("HistoryExhaustionFrame: %d" % int(rollback_session.history_exhaustion_frame))
-	print("RollbackCount: %d" % int(rollback_session.rollback_count))
-	print("MaxRollbackDepth: %d" % int(rollback_session.max_rollback_depth))
-	print("PredictionMisses: %d" % int(rollback_session.prediction_misses))
-	print("InputMutationError: %s" % str(rollback_session.input_mutation_error))
-	print("InputMutationErrorFrame: %d" % int(rollback_session.input_mutation_error_frame))
+	print("RedundantFramesReceived: %d" % int(diagnostics["redundant_frames_received"]))
+	print("RecoveredMissingFrames: %d" % int(diagnostics["recovered_missing_frames"]))
+	print("DuplicateInputFrames: %d" % int(diagnostics["duplicate_input_frames"]))
+	print("RepairRequestsSent: %d" % int(diagnostics["repair_requests_sent"]))
+	print("RepairRequestsReceived: %d" % int(diagnostics["repair_requests_received"]))
+	print("RepairResponsesSent: %d" % int(diagnostics["repair_responses_sent"]))
+	print("RepairResponsesReceived: %d" % int(diagnostics["repair_responses_received"]))
+	print("LastRepairRequestedFrame: %d" % int(diagnostics["last_repair_requested_frame"]))
+	print("LastRepairRecoveredFrame: %d" % int(diagnostics["last_repair_recovered_frame"]))
+	print("RepairUnavailable: %s" % str(diagnostics["repair_unavailable_error"]))
+	print("RepairUnavailableCount: %d" % int(diagnostics["repair_unavailable_count"]))
+	print("RemoteConfirmedThrough: %d" % int(diagnostics["remote_confirmed_through"]))
+	print("ConfirmationLag: %d" % int(diagnostics["confirmation_lag"]))
+	print("EarliestMissingRemoteFrame: %d" % int(diagnostics["earliest_missing_remote_frame"]))
+	print("OldestRetainedSnapshot: %d" % int(diagnostics["oldest_retained_snapshot"]))
+	print("HistoryExhausted: %s" % str(diagnostics["history_exhausted"]))
+	print("HistoryExhaustionFrame: %d" % int(diagnostics["history_exhaustion_frame"]))
+	print("RollbackCount: %d" % int(diagnostics["rollback_count"]))
+	print("MaxRollbackDepth: %d" % int(diagnostics["max_rollback_depth"]))
+	print("PredictionMisses: %d" % int(diagnostics["prediction_misses"]))
+	print("InputMutationError: %s" % str(diagnostics["input_mutation_error"]))
+	print("InputMutationErrorFrame: %d" % int(diagnostics["input_mutation_error_frame"]))
 
-	print("ChecksumFramesCompared: %d" % int(rollback_session.checksum_frames_compared))
-	print("ChecksumMismatchCount: %d" % int(rollback_session.checksum_mismatch_count))
-	print("ChecksumMismatch: %s" % str(rollback_session.checksum_mismatch))
-	print("FirstChecksumMismatchFrame: %d" % int(rollback_session.first_checksum_mismatch_frame))
-	print("FirstStateDivergenceFrame: %d" % int(adapter.first_debug_frame))
-	print("FirstStateDivergenceField: %s" % adapter.first_debug_field)
-	print("FirstStateDivergenceLocal: %s" % adapter.first_debug_local)
-	print("FirstStateDivergenceRemote: %s" % adapter.first_debug_remote)
+	print("ChecksumFramesCompared: %d" % int(diagnostics["checksum_frames_compared"]))
+	print("ChecksumMismatchCount: %d" % int(diagnostics["checksum_mismatch_count"]))
+	print("ChecksumMismatch: %s" % str(diagnostics["checksum_mismatch"]))
+	print("FirstChecksumMismatchFrame: %d" % int(diagnostics["first_checksum_mismatch_frame"]))
+	print("FirstStateDivergenceFrame: %d" % int(diagnostics["first_state_divergence_frame"]))
+	print("FirstStateDivergenceField: %s" % diagnostics["first_state_divergence_field"])
+	print("FirstStateDivergenceLocal: %s" % diagnostics["first_state_divergence_local"])
+	print("FirstStateDivergenceRemote: %s" % diagnostics["first_state_divergence_remote"])
 	print("P1HP: %d" % int(player_state.hp))
 	print("P2HP: %d" % int(opponent_state.hp))
 	print("P1State: %d" % int(player_state.state))
@@ -532,49 +529,47 @@ func _print_benchmark_results() -> void:
 		)))
 
 	if QA_STRESS_BENCHMARK_ENABLED:
-		_print_stress_verdict()
+		_print_stress_verdict(diagnostics)
 
 	print("InputDelayFrames: %d" % BENCHMARK_INPUT_DELAY_FRAMES)
 	print("===============================================")
 	print("")
 
 
-func _print_stress_verdict() -> void:
+func _print_stress_verdict(diagnostics: Dictionary) -> void:
 	var failures: Array[String] = []
 	var required_confirmed_frame: int = STRESS_SCHEDULE_FRAMES - 1
 
-	if int(rollback_session.current_frame) < STRESS_TOTAL_FRAMES:
+	if int(diagnostics["current_frame"]) < STRESS_TOTAL_FRAMES:
 		failures.append("benchmark did not reach the full stress duration")
-	if int(rollback_session.checksum_mismatch_count) != 0:
+	if int(diagnostics["checksum_mismatch_count"]) != 0:
 		failures.append("checksum mismatches were recorded")
-	if int(rollback_session.first_checksum_mismatch_frame) != -1:
+	if int(diagnostics["first_checksum_mismatch_frame"]) != -1:
 		failures.append("a first checksum mismatch frame was recorded")
-	if int(adapter.first_debug_frame) != -1:
+	if int(diagnostics["first_state_divergence_frame"]) != -1:
 		failures.append("a first state divergence frame was recorded")
-	if bool(rollback_session.history_exhausted):
+	if bool(diagnostics["history_exhausted"]):
 		failures.append("rollback history was exhausted")
-	if bool(rollback_session.input_mutation_error):
+	if bool(diagnostics["input_mutation_error"]):
 		failures.append("INPUT MUTATION was reported")
-	if bool(rollback_session.repair_unavailable_error):
+	if bool(diagnostics["repair_unavailable_error"]):
 		failures.append("REPAIR UNAVAILABLE was reported")
-	if int(rollback_session.max_prediction_lead) > int(
-		rollback_session.get_prediction_lead_limit()
-	):
+	if int(diagnostics["max_prediction_lead"]) > int(diagnostics["prediction_lead_limit"]):
 		failures.append("prediction lead exceeded its configured limit")
-	if int(rollback_session.remote_confirmed_through) < required_confirmed_frame:
+	if int(diagnostics["remote_confirmed_through"]) < required_confirmed_frame:
 		failures.append("stress schedule inputs were not fully confirmed")
-	if int(rollback_session.local_checksum_confirmed_through) < required_confirmed_frame:
+	if int(diagnostics["local_checksum_confirmed_through"]) < required_confirmed_frame:
 		failures.append("stress schedule checksums were not fully confirmed")
 	if int(player_state.hp) <= 0 or int(opponent_state.hp) <= 0:
 		failures.append("a fighter died before the stress benchmark completed")
 
 	if QA_STRESS_FORCE_PACKET_LOSS:
 		var expected_repair_frame: int = 4260 if local_player_id == 1 else 1860
-		if int(rollback_session.repair_requests_sent) < 1:
+		if int(diagnostics["repair_requests_sent"]) < 1:
 			failures.append("forced persistent hole sent no repair request")
-		if int(rollback_session.repair_responses_received) < 1:
+		if int(diagnostics["repair_responses_received"]) < 1:
 			failures.append("forced persistent hole received no repair response")
-		if int(rollback_session.last_repair_recovered_frame) < expected_repair_frame:
+		if int(diagnostics["last_repair_recovered_frame"]) < expected_repair_frame:
 			failures.append("forced persistent hole was not repaired")
 
 	print("StressVerdict: %s" % ("PASS" if failures.is_empty() else "FAIL"))
@@ -863,13 +858,14 @@ func _update_health_tint() -> void:
 func _update_rollback_debug_hud() -> void:
 	if rollback_session == null:
 		return
+	var diagnostics: Dictionary = rollback_session.get_diagnostics()
 
 	if debug_tick_label:
 		debug_tick_label.text = "LocalFrame=%d | PlayerID=%d | PredictionLead=%d | RollbackCount=%d" % [
-			int(rollback_session.current_frame),
+			int(diagnostics["current_frame"]),
 			local_player_id,
-			int(rollback_session.get_prediction_lead()),
-			int(rollback_session.rollback_count)
+			int(diagnostics["prediction_lead"]),
+			int(diagnostics["rollback_count"])
 		]
 
 	var mode_text := "ENet"
@@ -905,47 +901,47 @@ func _update_rollback_debug_hud() -> void:
 			BENCHMARK_DELAY_FRAMES,
 			BENCHMARK_JITTER_FRAMES,
 			str(benchmark_complete),
-			int(rollback_session.packets_received),
-			int(rollback_session.last_remote_input_frame),
-			int(rollback_session.last_remote_sim_frame),
-			int(rollback_session.remote_confirmed_through),
-			int(rollback_session.peer_confirmed_local_through),
-			int(rollback_session.finalized_through),
-			float(rollback_session.raw_estimated_frame_offset),
-			float(rollback_session.filtered_estimated_frame_offset),
-			int(rollback_session.last_sync_rtt_frames),
-			int(rollback_session.last_sync_sample_age_frames),
-			float(rollback_session.get_local_frame_advantage()),
-			str(rollback_session.soft_sync_active),
-			int(rollback_session.soft_sync_ahead_samples),
-			int(rollback_session.soft_sync_yield_ticks),
-			int(rollback_session.soft_sync_yield_cooldown),
-			int(rollback_session.get_prediction_lead()),
-			int(rollback_session.max_prediction_lead),
-			int(rollback_session.get_prediction_lead_limit()),
-			str(rollback_session.lead_stalled),
-			int(rollback_session.lead_stall_ticks),
-			int(rollback_session.redundant_frames_received),
-			int(rollback_session.recovered_missing_frames),
-			int(rollback_session.duplicate_input_frames),
-			int(rollback_session.repair_requests_sent),
-			int(rollback_session.repair_requests_received),
-			int(rollback_session.repair_responses_sent),
-			int(rollback_session.repair_responses_received),
-			int(rollback_session.last_repair_requested_frame),
-			int(rollback_session.last_repair_recovered_frame),
-			int(rollback_session.remote_confirmed_through),
-			int(rollback_session.get_confirmation_lag()),
-			int(rollback_session.get_earliest_missing_remote_frame()),
-			int(rollback_session.get_oldest_retained_snapshot()),
-			str(rollback_session.history_exhausted),
-			int(rollback_session.history_exhaustion_frame),
-			int(rollback_session.rollback_count),
-			int(rollback_session.max_rollback_depth),
-			int(rollback_session.prediction_misses),
-			int(rollback_session.checksum_frames_compared),
-			int(rollback_session.checksum_mismatch_count),
-			int(rollback_session.first_checksum_mismatch_frame)
+			int(diagnostics["packets_received"]),
+			int(diagnostics["last_remote_input_frame"]),
+			int(diagnostics["last_remote_sim_frame"]),
+			int(diagnostics["remote_confirmed_through"]),
+			int(diagnostics["peer_confirmed_local_through"]),
+			int(diagnostics["finalized_through"]),
+			float(diagnostics["raw_estimated_frame_offset"]),
+			float(diagnostics["filtered_estimated_frame_offset"]),
+			int(diagnostics["last_sync_rtt_frames"]),
+			int(diagnostics["last_sync_sample_age_frames"]),
+			float(diagnostics["local_frame_advantage"]),
+			str(diagnostics["soft_sync_active"]),
+			int(diagnostics["soft_sync_ahead_samples"]),
+			int(diagnostics["soft_sync_yield_ticks"]),
+			int(diagnostics["soft_sync_yield_cooldown"]),
+			int(diagnostics["prediction_lead"]),
+			int(diagnostics["max_prediction_lead"]),
+			int(diagnostics["prediction_lead_limit"]),
+			str(diagnostics["lead_stalled"]),
+			int(diagnostics["lead_stall_ticks"]),
+			int(diagnostics["redundant_frames_received"]),
+			int(diagnostics["recovered_missing_frames"]),
+			int(diagnostics["duplicate_input_frames"]),
+			int(diagnostics["repair_requests_sent"]),
+			int(diagnostics["repair_requests_received"]),
+			int(diagnostics["repair_responses_sent"]),
+			int(diagnostics["repair_responses_received"]),
+			int(diagnostics["last_repair_requested_frame"]),
+			int(diagnostics["last_repair_recovered_frame"]),
+			int(diagnostics["remote_confirmed_through"]),
+			int(diagnostics["confirmation_lag"]),
+			int(diagnostics["earliest_missing_remote_frame"]),
+			int(diagnostics["oldest_retained_snapshot"]),
+			str(diagnostics["history_exhausted"]),
+			int(diagnostics["history_exhaustion_frame"]),
+			int(diagnostics["rollback_count"]),
+			int(diagnostics["max_rollback_depth"]),
+			int(diagnostics["prediction_misses"]),
+			int(diagnostics["checksum_frames_compared"]),
+			int(diagnostics["checksum_mismatch_count"]),
+			int(diagnostics["first_checksum_mismatch_frame"])
 		]
 
 
@@ -981,9 +977,10 @@ func _update_visual_diagnostic_hud() -> void:
 	var prediction_lead: int = 0
 
 	if rollback_session != null:
-		simulation_frame = int(rollback_session.current_frame)
-		rollback_count = int(rollback_session.rollback_count)
-		prediction_lead = int(rollback_session.get_prediction_lead())
+		var diagnostics: Dictionary = rollback_session.get_diagnostics()
+		simulation_frame = int(diagnostics["current_frame"])
+		rollback_count = int(diagnostics["rollback_count"])
+		prediction_lead = int(diagnostics["prediction_lead"])
 
 	var p1_rendered := (
 		p1_placeholder.position

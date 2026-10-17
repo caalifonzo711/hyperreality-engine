@@ -29,24 +29,58 @@ const REPAIR_REQUEST_MAX_AGE := (
 var player_id: int = 1
 var input_delay_frames: int = 0
 
+# Local simulation-frame domain. This is the next authoritative frame to
+# simulate (not the last completed frame). It starts at 0 and is monotonic
+# within a match. Only tick() advances it, exactly once after a completed
+# snapshot/simulate/checksum sequence; rollback temporarily replays historical
+# frames without advancing it.
 var current_frame: int = 0
 
 var local_inputs: Dictionary = {}
 var remote_inputs: Dictionary = {}
 var predicted_remote_inputs: Dictionary = {}
+# Snapshot key F stores authoritative state immediately BEFORE simulation
+# frame F. A rollback to F restores snapshots[F], then replay begins at F and
+# continues through the frame immediately before the saved current_frame.
 var snapshots: Dictionary = {}
 
 var rollback_count: int = 0
 var max_rollback_depth: int = 0
 var prediction_misses: int = 0
 var packets_received: int = 0
-# Compatibility frontier used by the existing prediction-lead behavior.
-var last_remote_frame: int = -1
+# Remote input-frame domain. Highest valid numbered remote input observed in
+# either an ordinary packet, redundant history, or a repair response. It is
+# monotonic within a match and is updated only by _merge_remote_input_records().
 var last_remote_input_frame: int = -1
+
+# Read-only compatibility alias for existing HUD and benchmark consumers. It
+# has the same remote input-frame domain and monotonic behavior as
+# last_remote_input_frame and has no independent updater or storage. New
+# session code must use last_remote_input_frame as the canonical name.
+var last_remote_frame: int:
+	get:
+		return last_remote_input_frame
+
+# Remote simulation-frame domain. Highest peer sim_frame telemetry observed in
+# an ordinary input packet. It is monotonic within a match and is updated only
+# by _handle_sync_telemetry(); it is not proof that any input frame arrived.
 var last_remote_sim_frame: int = -1
+
+# Local input-frame domain as reported by the peer. Highest local frame that
+# the peer says it has contiguously received. It is monotonic within a match
+# and is updated only by _handle_sync_telemetry().
 var peer_confirmed_local_through: int = -1
+
+# Shared completed-frame frontier: min(remote inputs confirmed locally, local
+# inputs confirmed by the peer, last locally completed frame). It is monotonic
+# within a match and is updated only by _update_finalized_through().
 var finalized_through: int = -1
 var raw_estimated_frame_offset: float = 0.0
+
+# Cross-peer simulation-frame estimate in frames. Sign is remote minus local:
+# positive means the remote peer is ahead; negative means this peer is ahead.
+# It is filtered telemetry, is deliberately not monotonic, and is updated only
+# by _record_sync_sample() from accepted NTP-style samples.
 var filtered_estimated_frame_offset: float = 0.0
 var last_sync_rtt_frames: int = -1
 var last_sync_sample_age_frames: int = -1
@@ -100,7 +134,14 @@ var checksum_mismatch: bool = false
 # Checksums stored by simulation frame.
 var local_checksums: Dictionary = {}
 var remote_checksums: Dictionary = {}
+# Remote input-frame domain. Highest frame for which every remote input from
+# frame 0 through this value is present. It is monotonic within a match and is
+# advanced only by _advance_remote_confirmed_through().
 var remote_confirmed_through: int = -1
+
+# Local completed-frame domain. Highest local checksum released for comparison
+# after remote input became contiguous through that frame. It is monotonic
+# within a match and is advanced only by _send_newly_confirmed_checksums().
 var local_checksum_confirmed_through: int = -1
 var _confirmation_history_error_frame: int = -1
 
@@ -175,7 +216,6 @@ func reset_session() -> void:
 	max_rollback_depth = 0
 	prediction_misses = 0
 	packets_received = 0
-	last_remote_frame = -1
 	last_remote_input_frame = -1
 	last_remote_sim_frame = -1
 	peer_confirmed_local_through = -1
@@ -236,6 +276,7 @@ func reset_session() -> void:
 	_last_remote_input = _empty_input()
 
 	match_started = false
+	_assert_frontier_invariants()
 
 
 func start_session() -> void:
@@ -244,15 +285,19 @@ func start_session() -> void:
 
 
 func frame_gap() -> int:
-	if last_remote_frame < 0:
+	if last_remote_input_frame < 0:
 		return 0
 
-	return current_frame - last_remote_frame
+	return current_frame - last_remote_input_frame
 
 
+# Local-vs-remote-input domain. This is the number of frames the next local
+# simulation frame is ahead of the frame after the newest observed remote
+# input: max(current_frame - (last_remote_input_frame + 1), 0). It is derived,
+# not monotonic, and only the pacing logic in tick() consumes it.
 func get_prediction_lead() -> int:
 	return maxi(
-		current_frame - (last_remote_frame + 1),
+		current_frame - (last_remote_input_frame + 1),
 		0
 	)
 
@@ -275,7 +320,7 @@ func get_confirmation_lag() -> int:
 func get_earliest_missing_remote_frame() -> int:
 	var frame: int = remote_confirmed_through + 1
 
-	if frame <= last_remote_frame and not remote_inputs.has(frame):
+	if frame <= last_remote_input_frame and not remote_inputs.has(frame):
 		return frame
 
 	return -1
@@ -290,6 +335,119 @@ func get_oldest_retained_snapshot() -> int:
 			oldest = frame
 
 	return oldest
+
+
+# Returns a fresh, read-only-by-convention view of diagnostics at call time.
+# Counters and frontiers remain owned and updated by their existing systems.
+func get_diagnostics() -> Dictionary:
+	var first_state_divergence_frame: int = -1
+	var first_state_divergence_field: String = ""
+	var first_state_divergence_local: String = ""
+	var first_state_divergence_remote: String = ""
+
+	if adapter != null:
+		first_state_divergence_frame = int(adapter.first_debug_frame)
+		first_state_divergence_field = adapter.first_debug_field
+		first_state_divergence_local = adapter.first_debug_local
+		first_state_divergence_remote = adapter.first_debug_remote
+
+	return {
+		"current_frame": current_frame,
+		"last_remote_frame": last_remote_frame,
+		"last_remote_input_frame": last_remote_input_frame,
+		"last_remote_sim_frame": last_remote_sim_frame,
+		"frame_gap": frame_gap(),
+		"packets_received": packets_received,
+		"prediction_lead": get_prediction_lead(),
+		"prediction_lead_limit": get_prediction_lead_limit(),
+		"max_prediction_lead": max_prediction_lead,
+		"lead_stalled": lead_stalled,
+		"lead_stall_ticks": lead_stall_ticks,
+		"soft_sync_active": soft_sync_active,
+		"soft_sync_ahead_samples": soft_sync_ahead_samples,
+		"soft_sync_yield_ticks": soft_sync_yield_ticks,
+		"soft_sync_yield_cooldown": soft_sync_yield_cooldown,
+		"local_frame_advantage": get_local_frame_advantage(),
+		"remote_confirmed_through": remote_confirmed_through,
+		"peer_confirmed_local_through": peer_confirmed_local_through,
+		"finalized_through": finalized_through,
+		"local_checksum_confirmed_through": local_checksum_confirmed_through,
+		"confirmation_lag": get_confirmation_lag(),
+		"redundant_frames_received": redundant_frames_received,
+		"recovered_missing_frames": recovered_missing_frames,
+		"duplicate_input_frames": duplicate_input_frames,
+		"repair_requests_sent": repair_requests_sent,
+		"repair_requests_received": repair_requests_received,
+		"repair_responses_sent": repair_responses_sent,
+		"repair_responses_received": repair_responses_received,
+		"last_repair_requested_frame": last_repair_requested_frame,
+		"last_repair_recovered_frame": last_repair_recovered_frame,
+		"repair_unavailable_error": repair_unavailable_error,
+		"repair_unavailable_count": repair_unavailable_count,
+		"earliest_missing_remote_frame": get_earliest_missing_remote_frame(),
+		"oldest_retained_snapshot": get_oldest_retained_snapshot(),
+		"history_exhausted": history_exhausted,
+		"history_exhaustion_frame": history_exhaustion_frame,
+		"rollback_count": rollback_count,
+		"max_rollback_depth": max_rollback_depth,
+		"prediction_misses": prediction_misses,
+		"input_mutation_error": input_mutation_error,
+		"input_mutation_error_frame": input_mutation_error_frame,
+		"local_checksum": local_checksum,
+		"remote_checksum": remote_checksum,
+		"checksum_frames_compared": checksum_frames_compared,
+		"checksum_mismatch_count": checksum_mismatch_count,
+		"checksum_mismatch": checksum_mismatch,
+		"first_checksum_mismatch_frame": first_checksum_mismatch_frame,
+		"first_state_divergence_frame": first_state_divergence_frame,
+		"first_state_divergence_field": first_state_divergence_field,
+		"first_state_divergence_local": first_state_divergence_local,
+		"first_state_divergence_remote": first_state_divergence_remote,
+		"raw_estimated_frame_offset": raw_estimated_frame_offset,
+		"filtered_estimated_frame_offset": filtered_estimated_frame_offset,
+		"last_sync_rtt_frames": last_sync_rtt_frames,
+		"last_sync_sample_age_frames": last_sync_sample_age_frames,
+	}
+
+
+# Debug-build contracts for relationships that cannot occur in a correct
+# session. These assertions observe existing state only and never repair or
+# redirect control flow.
+func _assert_frontier_invariants() -> void:
+	assert(current_frame >= 0, "current_frame cannot be negative")
+	assert(
+		remote_confirmed_through >= -1,
+		"remote_confirmed_through cannot be below its sentinel"
+	)
+	assert(
+		peer_confirmed_local_through >= -1,
+		"peer_confirmed_local_through cannot be below its sentinel"
+	)
+	assert(finalized_through >= -1, "finalized_through cannot be below its sentinel")
+	assert(
+		local_checksum_confirmed_through >= -1,
+		"local_checksum_confirmed_through cannot be below its sentinel"
+	)
+	assert(
+		finalized_through <= current_frame - 1,
+		"finalized_through cannot exceed the last completed local frame"
+	)
+	assert(
+		finalized_through <= remote_confirmed_through,
+		"finalized_through cannot exceed confirmed remote input"
+	)
+	assert(
+		finalized_through <= peer_confirmed_local_through,
+		"finalized_through cannot exceed the peer's local-input confirmation"
+	)
+	assert(
+		local_checksum_confirmed_through <= current_frame - 1,
+		"a checksum cannot be confirmed before its local frame completes"
+	)
+	assert(
+		local_checksum_confirmed_through <= remote_confirmed_through,
+		"a checksum cannot be confirmed before its remote input"
+	)
 
 
 func _median(values: Array[float]) -> float:
@@ -325,6 +483,7 @@ func _update_finalized_through() -> void:
 		)
 	)
 	finalized_through = maxi(finalized_through, candidate)
+	_assert_frontier_invariants()
 
 
 func _record_sync_sample(
@@ -538,7 +697,7 @@ func _enter_history_exhaustion(frame: int) -> void:
 			frame,
 			current_frame,
 			remote_confirmed_through,
-			last_remote_frame,
+			last_remote_input_frame,
 			MAX_ROLLBACK_FRAMES,
 		]
 	)
@@ -561,7 +720,7 @@ func _maybe_request_missing_remote_input() -> void:
 	if missing_frame < 0:
 		return
 
-	if last_remote_frame - missing_frame < INPUT_REDUNDANCY_FRAMES:
+	if last_remote_input_frame - missing_frame < INPUT_REDUNDANCY_FRAMES:
 		return
 
 	var missing_age: int = current_frame - missing_frame
@@ -666,6 +825,8 @@ func _send_newly_confirmed_checksums() -> void:
 		local_checksum_confirmed_through = frame
 		_send_checksum_packet(frame, int(local_checksums[frame]))
 		_try_compare_checksum(frame)
+
+	_assert_frontier_invariants()
 
 
 func _report_confirmation_history_error(frame: int) -> void:
@@ -879,6 +1040,20 @@ func _simulate_frame(
 		)
 
 
+# Authoritative tick order (the current implementation, intentionally not
+# normalized here):
+# 1. Poll/process transport callbacks, advance repair timing, and request a
+#    missing input when eligible.
+# 2. Number and immutably latch the pending local input.
+# 3. Send that input, redundant history, and sync/confirmation telemetry.
+# 4. Evaluate history-exhaustion freeze, hard prediction stall, then soft-sync
+#    yield. A return here leaves current_frame unchanged.
+# 5. Clean the one history frame reaching the retention boundary.
+# 6. Select delayed local input and confirmed-or-predicted remote input.
+# 7. Capture the PRE-frame snapshot, then simulate exactly one frame.
+# 8. Capture/store the POST-frame checksum.
+# 9. Increment current_frame, update finalized_through, and send/compare newly
+#    confirmed checksums.
 func tick(local_input: Dictionary) -> void:
 	if adapter == null:
 		return
@@ -907,6 +1082,15 @@ func tick(local_input: Dictionary) -> void:
 	# =================================================
 	# Send local input
 	# =================================================
+	# Ordinary unreliable-ordered input packet schema:
+	# {
+	#   type: "input", frame: int, player_id: int, input: InputDictionary,
+	#   history: Array[{frame: int, input: InputDictionary}], sim_frame: int,
+	#   sync_sequence: int, echo_sync_sequence: int, echo_receive_frame: int,
+	#   confirmed_remote_through: int
+	# }
+	# InputDictionary is exactly: mx, lean_l, lean_r, atk_l, atk_h, block,
+	# dodge. The primary frame/input is retained even when history is present.
 
 	if transport and transport.has_method("send_packet"):
 		var sync_sequence: int = _next_sync_sequence
@@ -1141,10 +1325,6 @@ func _merge_remote_input_records(records: Array[Dictionary]) -> void:
 		if is_redundant:
 			recovered_missing_frames += 1
 
-	last_remote_frame = maxi(
-		last_remote_frame,
-		newest_valid_frame
-	)
 	last_remote_input_frame = maxi(
 		last_remote_input_frame,
 		newest_valid_frame
@@ -1183,6 +1363,9 @@ func _merge_remote_input_records(records: Array[Dictionary]) -> void:
 	_send_newly_confirmed_checksums()
 
 
+# Reliable repair request wire schema (RPC arguments, in order):
+#   frame: int, requester_player_id: int
+# It asks for exactly one previously numbered local input frame.
 func _on_input_repair_request_received(
 	frame: int,
 	requester_player_id: int
@@ -1226,6 +1409,11 @@ func _on_input_repair_request_received(
 	repair_responses_sent += 1
 
 
+# Reliable repair response wire schema (RPC arguments, in order):
+#   frame: int, responder_player_id: int,
+#   input_data: InputDictionary, available: bool
+# input_data is empty only when available is false; available responses enter
+# the same validation/merge/rollback path as ordinary input records.
 func _on_input_repair_response_received(
 	frame: int,
 	responder_player_id: int,
@@ -1357,7 +1545,8 @@ func _rollback_and_replay(from_frame: int) -> void:
 	# from ordinary forward simulation. Capturing does not mutate game state.
 	var presentation_before_snapshot: Dictionary = adapter.capture()
 
-	# Restore PRE-SIM state for first incorrect frame.
+	# snapshots[from_frame] is PRE-frame state. Restore it, then replay begins
+	# with from_frame itself and ends just before original_current_frame.
 	adapter.restore(
 		snapshots[from_frame]
 	)
