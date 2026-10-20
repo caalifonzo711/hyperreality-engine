@@ -37,6 +37,17 @@ const STRESS_DRAIN_FRAMES := 120
 const STRESS_TOTAL_FRAMES := STRESS_SCHEDULE_FRAMES + STRESS_DRAIN_FRAMES
 const STRESS_CYCLE_FRAMES := 1200
 
+# Separate stateless deterministic combat-fuzz benchmark. Enable at most one
+# benchmark mode. QA_STRESS_FORCE_PACKET_LOSS may also be used with this mode.
+const QA_COMBAT_FUZZ_BENCHMARK_ENABLED := false
+const QA_COMBAT_FUZZ_SEED := 0xC0FFEE
+const QA_COMBAT_FUZZ_STOP_AFTER_FRAME := -1
+const COMBAT_FUZZ_DURATION_FRAMES := 7200
+const COMBAT_FUZZ_DRAIN_FRAMES := 120
+const COMBAT_FUZZ_TOTAL_FRAMES := (
+	COMBAT_FUZZ_DURATION_FRAMES + COMBAT_FUZZ_DRAIN_FRAMES
+)
+
 # Set these on BOTH computers before each test:
 # 0  = baseline LAN
 # 6  = ~100ms
@@ -59,6 +70,9 @@ const BENCHMARK_INPUT_DELAY_FRAMES := 0 #for tuning test 3, 4, 6
 const LatencyHarnessTransportScene = preload("res://games/rollback_fighter/scripts/net/LatencyHarnessTransport.gd")
 const RollbackNetworkSessionScene = preload("res://games/rollback_fighter/scripts/net/RollbackNetworkSession.gd")
 const ENetTransportScene = preload("res://games/rollback_fighter/scripts/net/ENetTransport.gd")
+const CombatFuzzBenchmarkScript = preload(
+	"res://games/rollback_fighter/scripts/qa/CombatFuzzBenchmark.gd"
+)
 
 
 var rollback_session: Node = null
@@ -190,7 +204,7 @@ func _ready() -> void:
 		transport.artificial_delay_frames = BENCHMARK_DELAY_FRAMES
 		transport.artificial_jitter_frames = BENCHMARK_JITTER_FRAMES
 		transport.deterministic_stress_input_loss_enabled = (
-			QA_STRESS_BENCHMARK_ENABLED
+			(QA_STRESS_BENCHMARK_ENABLED or QA_COMBAT_FUZZ_BENCHMARK_ENABLED)
 			and QA_STRESS_FORCE_PACKET_LOSS
 		)
 		add_child(transport)
@@ -227,7 +241,12 @@ func _ready() -> void:
 		if not transport.start_match_received.is_connected(_on_start_match_received):
 			transport.start_match_received.connect(_on_start_match_received)
 
-	if QA_BOT_BENCHMARK_ENABLED and QA_STRESS_BENCHMARK_ENABLED:
+	var enabled_benchmark_count: int = (
+		int(QA_BOT_BENCHMARK_ENABLED)
+		+ int(QA_STRESS_BENCHMARK_ENABLED)
+		+ int(QA_COMBAT_FUZZ_BENCHMARK_ENABLED)
+	)
+	if enabled_benchmark_count > 1:
 		push_error("[Arena] Enable only one QA benchmark mode at a time.")
 
 	print("[Arena] Benchmark config | mode=%s delay=%d jitter=%d duration=%d" % [
@@ -292,6 +311,9 @@ func _on_frame_pre_draw() -> void:
 
 
 func _collect_local_input() -> Dictionary:
+	if QA_COMBAT_FUZZ_BENCHMARK_ENABLED:
+		return _collect_combat_fuzz_input()
+
 	if QA_STRESS_BENCHMARK_ENABLED:
 		return _collect_stress_bot_input()
 
@@ -309,6 +331,21 @@ func _collect_local_input() -> Dictionary:
 		"block": Input.is_action_pressed("block"),
 		"dodge": Input.is_action_just_pressed("dodge"),
 	}
+
+
+func _collect_combat_fuzz_input() -> Dictionary:
+	var benchmark_frame: int = 0
+	if rollback_session != null:
+		benchmark_frame = maxi(
+			int(rollback_session.current_frame) - benchmark_start_frame,
+			0
+		)
+
+	return CombatFuzzBenchmarkScript.input_for_frame(
+		QA_COMBAT_FUZZ_SEED,
+		benchmark_frame,
+		local_player_id
+	)
 
 
 func _collect_bot_input() -> Dictionary:
@@ -441,10 +478,23 @@ func _collect_stress_bot_input() -> Dictionary:
 
 
 func _benchmark_enabled() -> bool:
-	return QA_BOT_BENCHMARK_ENABLED or QA_STRESS_BENCHMARK_ENABLED
+	return (
+		QA_BOT_BENCHMARK_ENABLED
+		or QA_STRESS_BENCHMARK_ENABLED
+		or QA_COMBAT_FUZZ_BENCHMARK_ENABLED
+	)
 
 
 func _benchmark_duration_frames() -> int:
+	if QA_COMBAT_FUZZ_BENCHMARK_ENABLED:
+		if QA_COMBAT_FUZZ_STOP_AFTER_FRAME >= 0:
+			return clampi(
+				QA_COMBAT_FUZZ_STOP_AFTER_FRAME + 1,
+				1,
+				COMBAT_FUZZ_TOTAL_FRAMES
+			)
+		return COMBAT_FUZZ_TOTAL_FRAMES
+
 	if QA_STRESS_BENCHMARK_ENABLED:
 		return STRESS_TOTAL_FRAMES
 
@@ -452,6 +502,13 @@ func _benchmark_duration_frames() -> int:
 
 
 func _benchmark_mode_name() -> String:
+	if QA_COMBAT_FUZZ_BENCHMARK_ENABLED:
+		return (
+			"COMBAT_FUZZ_LOSS"
+			if QA_STRESS_FORCE_PACKET_LOSS
+			else "COMBAT_FUZZ_NATURAL"
+		)
+
 	if QA_STRESS_BENCHMARK_ENABLED:
 		return "STRESS_LOSS" if QA_STRESS_FORCE_PACKET_LOSS else "STRESS_NATURAL"
 
@@ -510,6 +567,16 @@ func _print_benchmark_results() -> void:
 	if QA_STRESS_BENCHMARK_ENABLED:
 		print("StressScheduleFrames: %d" % STRESS_SCHEDULE_FRAMES)
 		print("StressDrainFrames: %d" % STRESS_DRAIN_FRAMES)
+	if QA_COMBAT_FUZZ_BENCHMARK_ENABLED:
+		print("CombatFuzzSeed: %d" % QA_COMBAT_FUZZ_SEED)
+		print("CombatFuzzScheduleFrames: %d" % COMBAT_FUZZ_DURATION_FRAMES)
+		print("CombatFuzzDrainFrames: %d" % COMBAT_FUZZ_DRAIN_FRAMES)
+		print("CombatFuzzPhase1: 0-1199 MOVEMENT_REVERSAL")
+		print("CombatFuzzPhase2: 1200-2399 LIGHT_EMPHASIS")
+		print("CombatFuzzPhase3: 2400-3599 HEAVY_BLOCK")
+		print("CombatFuzzPhase4: 3600-4799 DODGE_COUNTER")
+		print("CombatFuzzPhase5: 4800-5999 MIXED_CHAOS")
+		print("CombatFuzzPhase6: 6000-7199 HIGH_INTENSITY_IDLE_RESUME")
 	print("Packets: %d" % int(diagnostics["packets_received"]))
 	print("LastRemoteFrame: %d" % int(diagnostics["last_remote_frame"]))
 	print("LocalFrame: %d" % int(diagnostics["current_frame"]))
@@ -571,13 +638,19 @@ func _print_benchmark_results() -> void:
 	print("P1HitConfirmed: %s" % str(player_state.hit_confirmed))
 	print("P2HitConfirmed: %s" % str(opponent_state.hit_confirmed))
 
-	if QA_STRESS_BENCHMARK_ENABLED and USE_ENET and transport != null:
+	if (
+		(QA_STRESS_BENCHMARK_ENABLED or QA_COMBAT_FUZZ_BENCHMARK_ENABLED)
+		and USE_ENET
+		and transport != null
+	):
 		print("ForcedInputPacketsDropped: %d" % int(transport.get(
 			"deterministic_stress_input_packets_dropped"
 		)))
 
 	if QA_STRESS_BENCHMARK_ENABLED:
 		_print_stress_verdict(diagnostics)
+	elif QA_COMBAT_FUZZ_BENCHMARK_ENABLED:
+		_print_combat_fuzz_results(diagnostics)
 
 	print("InputDelayFrames: %d" % BENCHMARK_INPUT_DELAY_FRAMES)
 	print("===============================================")
@@ -624,6 +697,19 @@ func _print_stress_verdict(diagnostics: Dictionary) -> void:
 	print("StressFailureCount: %d" % failures.size())
 	for failure: String in failures:
 		print("StressFailure: %s" % failure)
+
+
+func _print_combat_fuzz_results(diagnostics: Dictionary) -> void:
+	var snapshot: Dictionary = adapter.capture()
+	CombatFuzzBenchmarkScript.print_results(
+		QA_COMBAT_FUZZ_SEED,
+		diagnostics,
+		snapshot,
+		adapter.canonical_checksum(snapshot),
+		benchmark_start_frame,
+		QA_COMBAT_FUZZ_STOP_AFTER_FRAME,
+		COMBAT_FUZZ_DRAIN_FRAMES
+	)
 
 
 func _update_visuals() -> void:
