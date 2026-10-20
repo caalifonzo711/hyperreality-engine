@@ -94,6 +94,8 @@ const HITBOX_FILL_COLOR := Color(1.0, 0.1, 0.1, 0.28)
 const HITBOX_LINE_COLOR := Color(1.0, 0.2, 0.2, 1.0)
 const RENDER_CORRECTION_MAX_DISTANCE := 18.0
 const RENDER_CORRECTION_FRAMES := 3
+const PRESENTATION_STEP_SAMPLE_CAPACITY := 4096
+const PRESENTATION_LARGE_STEP_THRESHOLD := 10.0
 
 @export var show_runtime_combat_boxes: bool = true
 
@@ -105,6 +107,49 @@ var _remote_render_correction_error: Vector2 = Vector2.ZERO
 var _remote_render_correction_frames_remaining: int = 0
 var _remote_render_correction_snap_count: int = 0
 var _remote_render_correction_smooth_count: int = 0
+
+# Presentation Gate P1 diagnostics. These observe actual pre-draw samples and
+# never feed back into simulation or rendering.
+var _presentation_render_frame_count: int = 0
+var _presentation_max_physics_ticks_since_last_render: int = 0
+var _presentation_fps_sum: float = 0.0
+var _presentation_authoritative_x: float = 0.0
+var _presentation_rendered_x: float = 0.0
+var _presentation_render_visual_error_x: float = 0.0
+var _presentation_max_abs_render_visual_error_x: float = 0.0
+var _presentation_render_step_x: float = 0.0
+var _presentation_abs_render_step_x: float = 0.0
+var _presentation_authoritative_step_x: float = 0.0
+var _presentation_max_abs_render_step_x: float = 0.0
+var _presentation_max_abs_authoritative_step_x: float = 0.0
+var _presentation_render_step_count: int = 0
+var _presentation_abs_render_step_sum: float = 0.0
+var _presentation_cached_p95_abs_render_step: float = 0.0
+var _presentation_steps_over_8_px: int = 0
+var _presentation_steps_over_10_px: int = 0
+var _presentation_steps_over_16_px: int = 0
+var _presentation_large_step_with_multi_physics_tick: int = 0
+var _presentation_large_step_with_rollback: int = 0
+var _presentation_large_step_with_render_correction: int = 0
+var _presentation_large_step_with_prediction_lead_cap: int = 0
+var _presentation_large_step_with_soft_sync_yield: int = 0
+var _presentation_large_step_unclassified: int = 0
+var _presentation_rollback_this_render: bool = false
+var _presentation_soft_sync_yield_this_render: bool = false
+var _presentation_render_correction_this_render: bool = false
+var _presentation_has_previous_sample: bool = false
+var _presentation_previous_rendered_x: float = 0.0
+var _presentation_previous_authoritative_x: float = 0.0
+var _presentation_abs_render_step_samples: Array[float] = []
+var _presentation_step_sample_write_index: int = 0
+var _presentation_baseline_rollback_count: int = 0
+var _presentation_baseline_correction_smooth_count: int = 0
+var _presentation_baseline_correction_snap_count: int = 0
+var _presentation_last_rollback_count: int = 0
+var _presentation_last_soft_sync_yield_ticks: int = 0
+var _presentation_last_correction_smooth_count: int = 0
+var _presentation_last_correction_snap_count: int = 0
+var _presentation_max_prediction_lead: int = 0
 
 
 func _ready() -> void:
@@ -191,6 +236,7 @@ func _ready() -> void:
 		BENCHMARK_JITTER_FRAMES,
 		_benchmark_duration_frames()
 	])
+	_reset_presentation_measurement(false)
 
 
 func _physics_process(delta: float) -> void:
@@ -238,8 +284,10 @@ func _physics_process(delta: float) -> void:
 
 func _on_frame_pre_draw() -> void:
 	_last_render_physics_ticks = _physics_ticks_since_last_render
-	_physics_ticks_since_last_render = 0
+	var correction_was_active: bool = _remote_render_correction_active
 	_advance_remote_render_correction()
+	_record_presentation_measurement(correction_was_active)
+	_physics_ticks_since_last_render = 0
 	_update_visual_diagnostic_hud()
 
 
@@ -790,6 +838,312 @@ func _advance_remote_render_correction() -> void:
 	_apply_fighter_render_positions()
 
 
+func _store_presentation_step_sample(abs_step: float) -> void:
+	if _presentation_abs_render_step_samples.size() < PRESENTATION_STEP_SAMPLE_CAPACITY:
+		_presentation_abs_render_step_samples.append(abs_step)
+		return
+
+	_presentation_abs_render_step_samples[
+		_presentation_step_sample_write_index
+	] = abs_step
+	_presentation_step_sample_write_index = (
+		(_presentation_step_sample_write_index + 1)
+		% PRESENTATION_STEP_SAMPLE_CAPACITY
+	)
+
+
+func _presentation_mean_abs_render_step() -> float:
+	if _presentation_render_step_count <= 0:
+		return 0.0
+
+	return (
+		_presentation_abs_render_step_sum
+		/ float(_presentation_render_step_count)
+	)
+
+
+func _presentation_p95_abs_render_step() -> float:
+	if _presentation_abs_render_step_samples.is_empty():
+		return 0.0
+
+	var sorted_samples: Array[float] = (
+		_presentation_abs_render_step_samples.duplicate()
+	)
+	sorted_samples.sort()
+	var percentile_index: int = clampi(
+		int(ceil(0.95 * float(sorted_samples.size()))) - 1,
+		0,
+		sorted_samples.size() - 1
+	)
+	return sorted_samples[percentile_index]
+
+
+func _reset_presentation_measurement(print_confirmation: bool = true) -> void:
+	var diagnostics: Dictionary = {}
+	if rollback_session != null:
+		diagnostics = rollback_session.get_diagnostics()
+
+	_presentation_render_frame_count = 0
+	_presentation_max_physics_ticks_since_last_render = 0
+	_presentation_fps_sum = 0.0
+	_presentation_render_step_x = 0.0
+	_presentation_abs_render_step_x = 0.0
+	_presentation_authoritative_step_x = 0.0
+	_presentation_max_abs_render_step_x = 0.0
+	_presentation_max_abs_authoritative_step_x = 0.0
+	_presentation_render_step_count = 0
+	_presentation_abs_render_step_sum = 0.0
+	_presentation_cached_p95_abs_render_step = 0.0
+	_presentation_steps_over_8_px = 0
+	_presentation_steps_over_10_px = 0
+	_presentation_steps_over_16_px = 0
+	_presentation_large_step_with_multi_physics_tick = 0
+	_presentation_large_step_with_rollback = 0
+	_presentation_large_step_with_render_correction = 0
+	_presentation_large_step_with_prediction_lead_cap = 0
+	_presentation_large_step_with_soft_sync_yield = 0
+	_presentation_large_step_unclassified = 0
+	_presentation_rollback_this_render = false
+	_presentation_soft_sync_yield_this_render = false
+	_presentation_render_correction_this_render = false
+	_presentation_abs_render_step_samples.clear()
+	_presentation_step_sample_write_index = 0
+
+	var remote_state: PlayerState = _get_remote_fighter_state()
+	var remote_placeholder: Node2D = _get_remote_fighter_placeholder()
+	_presentation_has_previous_sample = (
+		remote_state != null and remote_placeholder != null
+	)
+	if _presentation_has_previous_sample:
+		_presentation_authoritative_x = remote_state.position.x
+		_presentation_rendered_x = remote_placeholder.position.x
+		_presentation_render_visual_error_x = (
+			_presentation_rendered_x - _presentation_authoritative_x
+		)
+		_presentation_previous_authoritative_x = _presentation_authoritative_x
+		_presentation_previous_rendered_x = _presentation_rendered_x
+	else:
+		_presentation_authoritative_x = 0.0
+		_presentation_rendered_x = 0.0
+		_presentation_render_visual_error_x = 0.0
+		_presentation_previous_authoritative_x = 0.0
+		_presentation_previous_rendered_x = 0.0
+
+	_presentation_max_abs_render_visual_error_x = absf(
+		_presentation_render_visual_error_x
+	)
+	_presentation_baseline_rollback_count = int(
+		diagnostics.get("rollback_count", 0)
+	)
+	_presentation_baseline_correction_smooth_count = (
+		_remote_render_correction_smooth_count
+	)
+	_presentation_baseline_correction_snap_count = (
+		_remote_render_correction_snap_count
+	)
+	_presentation_last_rollback_count = _presentation_baseline_rollback_count
+	_presentation_last_soft_sync_yield_ticks = int(
+		diagnostics.get("soft_sync_yield_ticks", 0)
+	)
+	_presentation_last_correction_smooth_count = (
+		_remote_render_correction_smooth_count
+	)
+	_presentation_last_correction_snap_count = (
+		_remote_render_correction_snap_count
+	)
+	_presentation_max_prediction_lead = int(
+		diagnostics.get("prediction_lead", 0)
+	)
+
+	if print_confirmation:
+		print("[PresentationP1] Measurement reset.")
+
+
+func _record_presentation_measurement(correction_was_active: bool) -> void:
+	var remote_state: PlayerState = _get_remote_fighter_state()
+	var remote_placeholder: Node2D = _get_remote_fighter_placeholder()
+	if remote_state == null or remote_placeholder == null:
+		return
+
+	var diagnostics: Dictionary = {}
+	if rollback_session != null:
+		diagnostics = rollback_session.get_diagnostics()
+
+	var rollback_count: int = int(diagnostics.get("rollback_count", 0))
+	var soft_sync_yield_ticks: int = int(
+		diagnostics.get("soft_sync_yield_ticks", 0)
+	)
+	var prediction_lead: int = int(diagnostics.get("prediction_lead", 0))
+	var prediction_lead_limit: int = int(
+		diagnostics.get("prediction_lead_limit", 0)
+	)
+
+	_presentation_render_frame_count += 1
+	_presentation_fps_sum += float(Engine.get_frames_per_second())
+	_presentation_max_physics_ticks_since_last_render = maxi(
+		_presentation_max_physics_ticks_since_last_render,
+		_last_render_physics_ticks
+	)
+	_presentation_max_prediction_lead = maxi(
+		_presentation_max_prediction_lead,
+		prediction_lead
+	)
+
+	_presentation_rollback_this_render = (
+		rollback_count > _presentation_last_rollback_count
+	)
+	_presentation_soft_sync_yield_this_render = (
+		soft_sync_yield_ticks > _presentation_last_soft_sync_yield_ticks
+	)
+	_presentation_render_correction_this_render = (
+		correction_was_active
+		or _remote_render_correction_active
+		or _remote_render_correction_smooth_count
+			> _presentation_last_correction_smooth_count
+		or _remote_render_correction_snap_count
+			> _presentation_last_correction_snap_count
+	)
+
+	_presentation_authoritative_x = remote_state.position.x
+	_presentation_rendered_x = remote_placeholder.position.x
+	_presentation_render_visual_error_x = (
+		_presentation_rendered_x - _presentation_authoritative_x
+	)
+	_presentation_max_abs_render_visual_error_x = maxf(
+		_presentation_max_abs_render_visual_error_x,
+		absf(_presentation_render_visual_error_x)
+	)
+
+	if _presentation_has_previous_sample:
+		_presentation_render_step_x = (
+			_presentation_rendered_x - _presentation_previous_rendered_x
+		)
+		_presentation_authoritative_step_x = (
+			_presentation_authoritative_x
+			- _presentation_previous_authoritative_x
+		)
+		var abs_render_step: float = absf(_presentation_render_step_x)
+		_presentation_abs_render_step_x = abs_render_step
+		var abs_authoritative_step: float = absf(
+			_presentation_authoritative_step_x
+		)
+		_presentation_render_step_count += 1
+		_presentation_abs_render_step_sum += abs_render_step
+		_presentation_max_abs_render_step_x = maxf(
+			_presentation_max_abs_render_step_x,
+			abs_render_step
+		)
+		_presentation_max_abs_authoritative_step_x = maxf(
+			_presentation_max_abs_authoritative_step_x,
+			abs_authoritative_step
+		)
+		_store_presentation_step_sample(abs_render_step)
+		if _presentation_render_step_count % 60 == 0:
+			_presentation_cached_p95_abs_render_step = (
+				_presentation_p95_abs_render_step()
+			)
+
+		if abs_render_step > 8.0:
+			_presentation_steps_over_8_px += 1
+		if abs_render_step > PRESENTATION_LARGE_STEP_THRESHOLD:
+			_presentation_steps_over_10_px += 1
+		if abs_render_step > 16.0:
+			_presentation_steps_over_16_px += 1
+
+		if abs_render_step > PRESENTATION_LARGE_STEP_THRESHOLD:
+			var correlated: bool = false
+			if _last_render_physics_ticks > 1:
+				_presentation_large_step_with_multi_physics_tick += 1
+				correlated = true
+			if _presentation_rollback_this_render:
+				_presentation_large_step_with_rollback += 1
+				correlated = true
+			if _presentation_render_correction_this_render:
+				_presentation_large_step_with_render_correction += 1
+				correlated = true
+			if (
+				prediction_lead_limit > 0
+				and prediction_lead >= prediction_lead_limit - 1
+			):
+				_presentation_large_step_with_prediction_lead_cap += 1
+				correlated = true
+			if _presentation_soft_sync_yield_this_render:
+				_presentation_large_step_with_soft_sync_yield += 1
+				correlated = true
+			if not correlated:
+				_presentation_large_step_unclassified += 1
+
+	_presentation_has_previous_sample = true
+	_presentation_previous_rendered_x = _presentation_rendered_x
+	_presentation_previous_authoritative_x = _presentation_authoritative_x
+	_presentation_last_rollback_count = rollback_count
+	_presentation_last_soft_sync_yield_ticks = soft_sync_yield_ticks
+	_presentation_last_correction_smooth_count = (
+		_remote_render_correction_smooth_count
+	)
+	_presentation_last_correction_snap_count = (
+		_remote_render_correction_snap_count
+	)
+
+
+func _print_presentation_measurement_report() -> void:
+	var diagnostics: Dictionary = {}
+	if rollback_session != null:
+		diagnostics = rollback_session.get_diagnostics()
+
+	var average_fps: float = 0.0
+	if _presentation_render_frame_count > 0:
+		average_fps = (
+			_presentation_fps_sum
+			/ float(_presentation_render_frame_count)
+		)
+
+	print("")
+	print("========== PRESENTATION GATE P1 REPORT ==========")
+	print("PlayerID: %d" % local_player_id)
+	print("RenderedSampleCount: %d" % _presentation_render_frame_count)
+	print("AverageFPS: %.2f" % average_fps)
+	print("MaxPhysicsTicksSinceLastRender: %d" % _presentation_max_physics_ticks_since_last_render)
+	print("MeanAbsRenderStepX: %.2f" % _presentation_mean_abs_render_step())
+	print("P95AbsRenderStepX: %.2f" % _presentation_p95_abs_render_step())
+	print("MaxAbsRenderStepX: %.2f" % _presentation_max_abs_render_step_x)
+	print("RenderStepsOver8px: %d" % _presentation_steps_over_8_px)
+	print("RenderStepsOver10px: %d" % _presentation_steps_over_10_px)
+	print("RenderStepsOver16px: %d" % _presentation_steps_over_16_px)
+	print("MaxAbsAuthoritativeStepX: %.2f" % _presentation_max_abs_authoritative_step_x)
+	print("MaxAbsRenderVisualErrorX: %.2f" % _presentation_max_abs_render_visual_error_x)
+	print("LargeStepWithMultiPhysicsTick: %d" % _presentation_large_step_with_multi_physics_tick)
+	print("LargeStepWithRollback: %d" % _presentation_large_step_with_rollback)
+	print("LargeStepWithRenderCorrection: %d" % _presentation_large_step_with_render_correction)
+	print("LargeStepWithPredictionLeadCap: %d" % _presentation_large_step_with_prediction_lead_cap)
+	print("LargeStepWithSoftSyncYield: %d" % _presentation_large_step_with_soft_sync_yield)
+	print("LargeStepUnclassified: %d" % _presentation_large_step_unclassified)
+	print("RollbackCountDelta: %d" % (
+		int(diagnostics.get("rollback_count", 0))
+		- _presentation_baseline_rollback_count
+	))
+	print("CorrectionSmoothCountDelta: %d" % (
+		_remote_render_correction_smooth_count
+		- _presentation_baseline_correction_smooth_count
+	))
+	print("CorrectionSnapCountDelta: %d" % (
+		_remote_render_correction_snap_count
+		- _presentation_baseline_correction_snap_count
+	))
+	print("MaxPredictionLeadDuringMeasurement: %d" % maxi(
+		_presentation_max_prediction_lead,
+		int(diagnostics.get("prediction_lead", 0))
+	))
+	print("ChecksumMismatchCount: %d" % int(
+		diagnostics.get("checksum_mismatch_count", 0)
+	))
+	print("FirstChecksumMismatchFrame: %d" % int(
+		diagnostics.get("first_checksum_mismatch_frame", -1)
+	))
+	print("=================================================")
+	print("")
+
+
 func _draw_runtime_combat_boxes() -> void:
 	if not show_runtime_combat_boxes or _combat_box_overlay == null:
 		return
@@ -1010,7 +1364,8 @@ func _update_visual_diagnostic_hud() -> void:
 	)
 
 	debug_pos_label.text = (
-		"SimulationFrame=%d | PhysicsTicksSinceLastRender=%d | FPS=%d\n" +
+		"SimulationFrame=%d | RenderFrameCount=%d | FPS=%d\n" +
+		"PhysicsTicksSinceLastRender=%d | MaxPhysicsTicksSinceLastRender=%d\n" +
 		"RollbackCount=%d | PredictionLead=%d\n" +
 		"P1 Auth=(%.2f, %.2f) Node=(%.2f, %.2f) Delta=(%.2f, %.2f)\n" +
 		"P1 Anim=%s Frame=%d Texture=(%.0f, %.0f)\n" +
@@ -1018,11 +1373,18 @@ func _update_visual_diagnostic_hud() -> void:
 		"P2 Anim=%s Frame=%d Texture=(%.0f, %.0f)\n" +
 		"RenderCorrectionActive=%s | RenderCorrectionErrorX=%.2f | RenderCorrectionFramesRemaining=%d\n" +
 		"RenderedPosition=(%.2f, %.2f) | AuthoritativePosition=(%.2f, %.2f)\n" +
-		"CorrectionSnapCount=%d | CorrectionSmoothCount=%d"
+		"CorrectionSnapCount=%d | CorrectionSmoothCount=%d\n" +
+		"[Presentation Gate P1 Remote] AuthoritativeX=%.2f | RenderedX=%.2f | VisualErrorX=%.2f | MaxVisualErrorX=%.2f\n" +
+		"RenderStepX=%.2f | AbsRenderStepX=%.2f | MaxRenderStepX=%.2f | P95RenderStepX=%.2f | Steps>10px=%d\n" +
+		"AuthoritativeStepX=%.2f | MaxAuthoritativeStepX=%.2f\n" +
+		"ThisRender Rollback=%s | Correction=%s | SoftYield=%s\n" +
+		"LargeStep MultiTick=%d | Rollback=%d | Correction=%d | SoftYield=%d | Unclassified=%d"
 	) % [
 		simulation_frame,
-		_last_render_physics_ticks,
+		_presentation_render_frame_count,
 		int(Engine.get_frames_per_second()),
+		_last_render_physics_ticks,
+		_presentation_max_physics_ticks_since_last_render,
 		rollback_count,
 		prediction_lead,
 		player_state.position.x,
@@ -1054,6 +1416,25 @@ func _update_visual_diagnostic_hud() -> void:
 		remote_authoritative.y,
 		_remote_render_correction_snap_count,
 		_remote_render_correction_smooth_count,
+		_presentation_authoritative_x,
+		_presentation_rendered_x,
+		_presentation_render_visual_error_x,
+		_presentation_max_abs_render_visual_error_x,
+		_presentation_render_step_x,
+		_presentation_abs_render_step_x,
+		_presentation_max_abs_render_step_x,
+		_presentation_cached_p95_abs_render_step,
+		_presentation_steps_over_10_px,
+		_presentation_authoritative_step_x,
+		_presentation_max_abs_authoritative_step_x,
+		str(_presentation_rollback_this_render),
+		str(_presentation_render_correction_this_render),
+		str(_presentation_soft_sync_yield_this_render),
+		_presentation_large_step_with_multi_physics_tick,
+		_presentation_large_step_with_rollback,
+		_presentation_large_step_with_render_correction,
+		_presentation_large_step_with_soft_sync_yield,
+		_presentation_large_step_unclassified,
 	]
 
 
@@ -1146,6 +1527,18 @@ func _on_start_match_received() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event: InputEventKey = event
+		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_F2:
+				_reset_presentation_measurement()
+				get_viewport().set_input_as_handled()
+				return
+			if key_event.keycode == KEY_F3:
+				_print_presentation_measurement_report()
+				get_viewport().set_input_as_handled()
+				return
+
 	if event.is_action_pressed("ui_accept"):
 		if transport != null and transport.has_method("send_start_match"):
 			if not bool(transport.get("is_host")):
