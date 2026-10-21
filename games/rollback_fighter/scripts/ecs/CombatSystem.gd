@@ -104,6 +104,8 @@ var _heavy_cd_frames := {
 }
 
 var _hitstop_frames: int = 0
+var match_over: bool = false
+var winner_id: int = 0
 
 
 # =================================================
@@ -140,6 +142,8 @@ func _load_hitbox_profiles() -> void:
 
 func tick() -> void:
 	if p1_state == null or p2_state == null:
+		return
+	if match_over:
 		return
 
 	_tick_timers()
@@ -606,7 +610,7 @@ func _do_damage(
 	# Block
 	# -----------------------------------------
 
-	if defender.state == PlayerState.MoveState.BLOCK:
+	if _is_blocking_front_attack(attacker, defender):
 		dmg = int(dmg * 0.2)
 
 		defender.take_damage(dmg)
@@ -635,6 +639,10 @@ func _do_damage(
 			defender.max_knock_speed
 		)
 
+	if defender.hp <= 0:
+		match_over = true
+		winner_id = _get_pid(attacker)
+
 
 	_hitstop_frames = hitstop_frames
 
@@ -648,6 +656,26 @@ func _do_damage(
 		" target_hp=",
 		defender.hp
 	)
+
+
+# =================================================
+# Directional block
+# =================================================
+
+func _is_blocking_front_attack(
+	attacker: PlayerState,
+	defender: PlayerState
+) -> bool:
+	if defender.state != PlayerState.MoveState.BLOCK:
+		return false
+
+	var attack_side: float = signf(
+		attacker.position.x - defender.position.x
+	)
+	if attack_side == 0.0:
+		return true
+
+	return int(attack_side) == defender.facing
 
 
 # =================================================
@@ -674,6 +702,8 @@ func _get_pid(ps: PlayerState) -> int:
 func capture_state() -> Dictionary:
 	return {
 		"hitstop": _hitstop_frames,
+		"match_over": match_over,
+		"winner_id": winner_id,
 
 		"light_cd_1": int(
 			_light_cd_frames.get(1, 0)
@@ -697,6 +727,8 @@ func restore_state(s: Dictionary) -> void:
 	_hitstop_frames = int(
 		s.get("hitstop", 0)
 	)
+	match_over = bool(s.get("match_over", false))
+	winner_id = int(s.get("winner_id", 0))
 
 	_light_cd_frames[1] = int(
 		s.get("light_cd_1", 0)

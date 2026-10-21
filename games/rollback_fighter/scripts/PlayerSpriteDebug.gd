@@ -23,7 +23,8 @@ class_name PlayerSpriteDebug
 ]
 
 @export var dodge_frames: Array[String] = [
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_jump_1.png",
+	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_spot_dodge1.png",
+	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_spot_dodge2.png",
 ]
 
 @export var hit_frames: Array[String] = [
@@ -66,9 +67,13 @@ const FRAME_PRESENTATION := {
 		"feet": Vector2(279.0, 416.0),
 		"scale": 0.135,
 	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_jump_1.png": {
-		"feet": Vector2(254.0, 348.0),
-		"scale": 0.172,
+	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_spot_dodge1.png": {
+		"feet": Vector2(335.0, 413.0),
+		"scale": 0.135,
+	},
+	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_spot_dodge2.png": {
+		"feet": Vector2(280.0, 416.0),
+		"scale": 0.135,
 	},
 	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_hit_0.png": {
 		"feet": Vector2(284.0, 402.0),
@@ -151,6 +156,16 @@ func _advance_idle_animation(delta: float) -> void:
 
 func _get_authoritative_visual_frame() -> int:
 	if _ps == null:
+		return 0
+
+	if _mode == "dodge":
+		var frames_left_val: Variant = _ps.get("frames_left")
+		if typeof(frames_left_val) != TYPE_INT:
+			return 0
+
+		var elapsed: int = PlayerState.DODGE_TOTAL - int(frames_left_val)
+		if elapsed * 2 >= PlayerState.DODGE_TOTAL:
+			return mini(1, maxi(dodge_frames.size() - 1, 0))
 		return 0
 
 	if _mode != "jab" and _mode != "heavy":

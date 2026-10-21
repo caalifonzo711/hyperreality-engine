@@ -21,15 +21,13 @@ const ENET_PORT := 7777
 
 # -------------------------------------------------
 # Benchmark config
-# false = normal manual play
-# true  = controlled deterministic QA bot benchmark
 # -------------------------------------------------
+
+# Controlled deterministic single-jab QA benchmark
 const QA_BOT_BENCHMARK_ENABLED := false
 const BENCHMARK_DURATION_FRAMES := 3600 # 60 seconds at 60fps
 
-# Separate stress benchmark. Keep QA_BOT_BENCHMARK_ENABLED false when enabled.
-# Natural stress: QA_STRESS_BENCHMARK_ENABLED=true, FORCE_LOSS=false.
-# Loss stress:    QA_STRESS_BENCHMARK_ENABLED=true, FORCE_LOSS=true.
+# Scripted stress benchmark
 const QA_STRESS_BENCHMARK_ENABLED := false
 const QA_STRESS_FORCE_PACKET_LOSS := false
 const STRESS_SCHEDULE_FRAMES := 7200
@@ -37,9 +35,8 @@ const STRESS_DRAIN_FRAMES := 120
 const STRESS_TOTAL_FRAMES := STRESS_SCHEDULE_FRAMES + STRESS_DRAIN_FRAMES
 const STRESS_CYCLE_FRAMES := 1200
 
-# Separate stateless deterministic combat-fuzz benchmark. Enable at most one
-# benchmark mode. QA_STRESS_FORCE_PACKET_LOSS may also be used with this mode.
-const QA_COMBAT_FUZZ_BENCHMARK_ENABLED := false
+# Deterministic combat-fuzz benchmark
+const QA_COMBAT_FUZZ_BENCHMARK_ENABLED := true
 const QA_COMBAT_FUZZ_SEED := 0xC0FFEE
 const QA_COMBAT_FUZZ_STOP_AFTER_FRAME := -1
 const COMBAT_FUZZ_DURATION_FRAMES := 7200
@@ -47,7 +44,6 @@ const COMBAT_FUZZ_DRAIN_FRAMES := 120
 const COMBAT_FUZZ_TOTAL_FRAMES := (
 	COMBAT_FUZZ_DURATION_FRAMES + COMBAT_FUZZ_DRAIN_FRAMES
 )
-
 # Set these on BOTH computers before each test:
 # 0  = baseline LAN
 # 6  = ~100ms
@@ -1249,6 +1245,10 @@ func _draw_runtime_combat_boxes() -> void:
 
 func _update_play_hud() -> void:
 	if play_status_label == null:
+		return
+
+	if combat_system != null and combat_system.match_over:
+		play_status_label.text = "PLAYER %d WINS" % combat_system.winner_id
 		return
 
 	if rollback_session != null and bool(rollback_session.match_started):

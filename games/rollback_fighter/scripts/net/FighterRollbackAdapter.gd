@@ -43,6 +43,8 @@ const DEBUG_STATE_FIELDS := [
 	["buffer.p2.light", "buf", "p2_l"], ["buffer.p2.heavy", "buf", "p2_h"],
 
 	["combat.hitstop", "combat", "hitstop"],
+	["combat.match_over", "combat", "match_over"],
+	["combat.winner_id", "combat", "winner_id"],
 	["combat.light_cooldown.p1", "combat", "light_cd_1"],
 	["combat.light_cooldown.p2", "combat", "light_cd_2"],
 	["combat.heavy_cooldown.p1", "combat", "heavy_cd_1"],
@@ -70,6 +72,9 @@ func setup(_p1: PlayerState, _p2: PlayerState, _input: Node, _lean: Node, _comba
 
 
 func simulate(local: Dictionary, remote: Dictionary, dt: float) -> void:
+	if combat_sys != null and bool(combat_sys.get("match_over")):
+		return
+
 	_derive_wall_contact(p1_state)
 	_derive_wall_contact(p2_state)
 

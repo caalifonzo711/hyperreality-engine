@@ -173,14 +173,22 @@ horizontal_alignment = 1
 custom_minimum_size = Vector2(0, 40)
 offset_left = 85.0
 offset_top = 71.0
-offset_right = 462.0
+offset_right = 715.0
 offset_bottom = 111.0
 size_flags_horizontal = 3
+
+[node name="P1Label" type="Label" parent="HUD/HBoxContainer"]
+layout_mode = 2
+text = "P1 HP: 100"
 
 [node name="P1Bar" type="ProgressBar" parent="HUD/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 step = 1.0
+
+[node name="P2Label" type="Label" parent="HUD/HBoxContainer"]
+layout_mode = 2
+text = "P2 HP: 100"
 
 [node name="P2Bar" type="ProgressBar" parent="HUD/HBoxContainer"]
 layout_mode = 2
