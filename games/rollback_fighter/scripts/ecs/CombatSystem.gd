@@ -44,7 +44,7 @@ const HEAVY_DMG: int = 14
 
 const HURTBOX_HALF: float = 8.0
 const LIGHT_REACH: float = 24.0
-const HEAVY_REACH: float = 36.0
+const HEAVY_REACH: float = 56.0
 
 
 # =================================================
@@ -74,8 +74,8 @@ const HEAVY_COOLDOWN_FRAMES: int = 12
 # Knockback
 # =================================================
 
-const KNOCK_X_LIGHT: float = 340.0
-const KNOCK_X_HEAVY: float = 700.0
+const KNOCK_X_LIGHT: float = 220.0
+const KNOCK_X_HEAVY: float = 600.0
 
 
 # =================================================
@@ -85,8 +85,19 @@ const KNOCK_X_HEAVY: float = 700.0
 const HITSTOP_LIGHT: int = 3
 const HITSTOP_HEAVY: int = 7
 
-const HITSTUN_LIGHT: int = 8
-const HITSTUN_HEAVY: int = 14
+const HITSTUN_LIGHT: int = 9
+const HITSTUN_HEAVY: int = 12
+
+const HITSTUN_SCALE_PERCENT := [100, 85, 70, 55]
+const KNOCKBACK_SCALE_PERCENT := [100, 115, 135, 160]
+
+const GUARD_MAX_UNITS: int = 300
+const GUARD_HOLD_DRAIN_UNITS: int = 1
+const GUARD_REGEN_UNITS: int = 1
+const GUARD_DAMAGE_LIGHT_UNITS: int = 30
+const GUARD_DAMAGE_HEAVY_UNITS: int = 90
+const GUARD_BREAK_REFILL_UNITS: int = 150
+const GUARD_BREAK_HURT_FRAMES: int = 24
 
 
 # =================================================
@@ -106,6 +117,16 @@ var _heavy_cd_frames := {
 var _hitstop_frames: int = 0
 var match_over: bool = false
 var winner_id: int = 0
+
+var _combo_hits := {
+	1: 0,
+	2: 0,
+}
+
+var _guard_units := {
+	1: GUARD_MAX_UNITS,
+	2: GUARD_MAX_UNITS,
+}
 
 
 # =================================================
@@ -143,8 +164,15 @@ func _load_hitbox_profiles() -> void:
 func tick() -> void:
 	if p1_state == null or p2_state == null:
 		return
+
+	_reset_combo_if_recovered(p1_state)
+	_reset_combo_if_recovered(p2_state)
+
 	if match_over:
 		return
+
+	_tick_guard(p1_state)
+	_tick_guard(p2_state)
 
 	_tick_timers()
 
@@ -610,15 +638,32 @@ func _do_damage(
 	# Block
 	# -----------------------------------------
 
-	if _is_blocking_front_attack(attacker, defender):
+	var blocked: bool = _is_blocking_front_attack(attacker, defender)
+	if blocked:
 		dmg = int(dmg * 0.2)
 
 		defender.take_damage(dmg)
+		_hitstop_frames = hitstop_frames
+		_apply_blocked_guard_damage(attacker, defender)
 
 		print("[Combat] BLOCKED!")
 
 	else:
-		defender.take_damage(dmg, hitstun_frames)
+		var defender_id: int = _get_pid(defender)
+		var combo_hit: int = int(_combo_hits.get(defender_id, 0)) + 1
+		_combo_hits[defender_id] = combo_hit
+
+		var scale_index: int = mini(combo_hit - 1, 3)
+		var scaled_hitstun: int = _scale_percent_nearest(
+			hitstun_frames,
+			int(HITSTUN_SCALE_PERCENT[scale_index])
+		)
+		var scaled_knockback: int = _scale_percent_nearest(
+			roundi(knock_impulse),
+			int(KNOCKBACK_SCALE_PERCENT[scale_index])
+		)
+
+		defender.take_damage(dmg, scaled_hitstun)
 
 		var dir := signf(
 			defender.position.x
@@ -630,7 +675,7 @@ func _do_damage(
 
 		defender.vel.x += (
 			dir
-			* knock_impulse
+			* float(scaled_knockback)
 		)
 
 		defender.vel.x = clampf(
@@ -639,12 +684,16 @@ func _do_damage(
 			defender.max_knock_speed
 		)
 
+		if defender.state != PlayerState.MoveState.HURT:
+			_combo_hits[defender_id] = 0
+
 	if defender.hp <= 0:
 		match_over = true
 		winner_id = _get_pid(attacker)
 
 
-	_hitstop_frames = hitstop_frames
+	if not blocked:
+		_hitstop_frames = hitstop_frames
 
 	var attacker_id: int = _get_pid(attacker)
 
@@ -656,6 +705,75 @@ func _do_damage(
 		" target_hp=",
 		defender.hp
 	)
+
+
+# =================================================
+# Combo scaling
+# =================================================
+
+func _reset_combo_if_recovered(defender: PlayerState) -> void:
+	if defender.state == PlayerState.MoveState.HURT:
+		return
+
+	_combo_hits[_get_pid(defender)] = 0
+
+
+func _scale_percent_nearest(base_value: int, percent: int) -> int:
+	@warning_ignore("integer_division")
+	return maxi(1, (base_value * percent + 50) / 100)
+
+
+# =================================================
+# Guard resource
+# =================================================
+
+func _tick_guard(defender: PlayerState) -> void:
+	var defender_id: int = _get_pid(defender)
+	var guard_units: int = int(
+		_guard_units.get(defender_id, GUARD_MAX_UNITS)
+	)
+
+	if defender.state == PlayerState.MoveState.BLOCK:
+		guard_units = maxi(
+			guard_units - GUARD_HOLD_DRAIN_UNITS,
+			0
+		)
+		_guard_units[defender_id] = guard_units
+
+		if guard_units <= 0:
+			_trigger_guard_break(defender)
+
+	elif not defender.blocking:
+		_guard_units[defender_id] = mini(
+			guard_units + GUARD_REGEN_UNITS,
+			GUARD_MAX_UNITS
+		)
+
+
+func _apply_blocked_guard_damage(
+	attacker: PlayerState,
+	defender: PlayerState
+) -> void:
+	var guard_damage: int = GUARD_DAMAGE_LIGHT_UNITS
+	if attacker.attack_kind == PlayerState.AttackKind.HEAVY:
+		guard_damage = GUARD_DAMAGE_HEAVY_UNITS
+
+	var defender_id: int = _get_pid(defender)
+	_guard_units[defender_id] = maxi(
+		int(_guard_units.get(defender_id, GUARD_MAX_UNITS))
+		- guard_damage,
+		0
+	)
+
+	if int(_guard_units[defender_id]) <= 0:
+		_trigger_guard_break(defender)
+
+
+func _trigger_guard_break(defender: PlayerState) -> void:
+	var defender_id: int = _get_pid(defender)
+	_combo_hits[defender_id] = 0
+	_guard_units[defender_id] = GUARD_BREAK_REFILL_UNITS
+	defender.take_damage(0, GUARD_BREAK_HURT_FRAMES)
 
 
 # =================================================
@@ -704,6 +822,10 @@ func capture_state() -> Dictionary:
 		"hitstop": _hitstop_frames,
 		"match_over": match_over,
 		"winner_id": winner_id,
+		"combo_hits_1": int(_combo_hits.get(1, 0)),
+		"combo_hits_2": int(_combo_hits.get(2, 0)),
+		"guard_units_1": int(_guard_units.get(1, GUARD_MAX_UNITS)),
+		"guard_units_2": int(_guard_units.get(2, GUARD_MAX_UNITS)),
 
 		"light_cd_1": int(
 			_light_cd_frames.get(1, 0)
@@ -729,6 +851,10 @@ func restore_state(s: Dictionary) -> void:
 	)
 	match_over = bool(s.get("match_over", false))
 	winner_id = int(s.get("winner_id", 0))
+	_combo_hits[1] = int(s.get("combo_hits_1", 0))
+	_combo_hits[2] = int(s.get("combo_hits_2", 0))
+	_guard_units[1] = int(s.get("guard_units_1", GUARD_MAX_UNITS))
+	_guard_units[2] = int(s.get("guard_units_2", GUARD_MAX_UNITS))
 
 	_light_cd_frames[1] = int(
 		s.get("light_cd_1", 0)

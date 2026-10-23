@@ -36,7 +36,7 @@ const STRESS_TOTAL_FRAMES := STRESS_SCHEDULE_FRAMES + STRESS_DRAIN_FRAMES
 const STRESS_CYCLE_FRAMES := 1200
 
 # Deterministic combat-fuzz benchmark
-const QA_COMBAT_FUZZ_BENCHMARK_ENABLED := true
+const QA_COMBAT_FUZZ_BENCHMARK_ENABLED := false
 const QA_COMBAT_FUZZ_SEED := 0xC0FFEE
 const QA_COMBAT_FUZZ_STOP_AFTER_FRAME := -1
 const COMBAT_FUZZ_DURATION_FRAMES := 7200
@@ -96,8 +96,12 @@ var _last_render_physics_ticks: int = 0
 @onready var debug_input_label: Label = debug_hud_root.get_node("MarginContainer/VBoxContainer/InputLabel") if debug_hud_root else null
 @onready var debug_replay_label: Label = debug_hud_root.get_node("MarginContainer/VBoxContainer/ReplayLabel") if debug_hud_root else null
 
-const LEAN_OFFSET := 14.0
-const LEAN_LERP_SPEED := 10.0
+const CAMERA_FIXED_Y := 200.0
+const CAMERA_FOLLOW_SPEED := 8.0
+const CAMERA_ZOOM_SPEED := 6.0
+const CAMERA_MAX_ZOOM := 1.25
+const CAMERA_MIN_ZOOM := 1.00
+const CAMERA_HORIZONTAL_PADDING := 160.0
 const HURTBOX_FILL_COLOR := Color(0.15, 0.45, 1.0, 0.22)
 const HURTBOX_LINE_COLOR := Color(0.25, 0.65, 1.0, 0.95)
 const HITBOX_FILL_COLOR := Color(1.0, 0.1, 0.1, 0.28)
@@ -109,7 +113,6 @@ const PRESENTATION_LARGE_STEP_THRESHOLD := 10.0
 
 @export var show_runtime_combat_boxes: bool = true
 
-var _lean_vis_x: float = 0.0
 var _combat_box_overlay: Node2D = null
 var _remote_render_correction_active: bool = false
 var _remote_render_correction_initial_error: Vector2 = Vector2.ZERO
@@ -1279,10 +1282,33 @@ func _update_play_hud() -> void:
 
 
 func _update_camera(delta: float) -> void:
-	var target := float(player_state.lean_direction) * LEAN_OFFSET
-	_lean_vis_x = lerp(_lean_vis_x, target, clamp(LEAN_LERP_SPEED * delta, 0.0, 1.0))
-	if cam:
-		cam.offset = Vector2(_lean_vis_x, 0.0)
+	if cam == null or p1_placeholder == null or p2_placeholder == null:
+		return
+
+	var p1_x: float = p1_placeholder.position.x
+	var p2_x: float = p2_placeholder.position.x
+	var midpoint_x: float = (p1_x + p2_x) * 0.5
+	var follow_weight: float = 1.0 - exp(-CAMERA_FOLLOW_SPEED * delta)
+
+	cam.position.x = lerpf(cam.position.x, midpoint_x, follow_weight)
+	cam.position.y = CAMERA_FIXED_Y
+	cam.offset = Vector2.ZERO
+
+	var horizontal_separation: float = absf(p2_x - p1_x)
+	var viewport_width: float = get_viewport_rect().size.x
+	var usable_width: float = maxf(
+		viewport_width - CAMERA_HORIZONTAL_PADDING,
+		1.0
+	)
+	var target_zoom: float = clampf(
+		usable_width / maxf(horizontal_separation, 1.0),
+		CAMERA_MIN_ZOOM,
+		CAMERA_MAX_ZOOM
+	)
+	var zoom_weight: float = 1.0 - exp(-CAMERA_ZOOM_SPEED * delta)
+	var smoothed_zoom: float = lerpf(cam.zoom.x, target_zoom, zoom_weight)
+
+	cam.zoom = Vector2.ONE * smoothed_zoom
 
 
 func _update_health_tint() -> void:

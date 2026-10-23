@@ -44,10 +44,12 @@ var facing: int = 1
 var blocking: bool = false
 var dodge_requested: bool = false
 var invulnerable: bool = false
+var dodge_cooldown_frames: int = 0
 
-const DODGE_TOTAL: int = 20
-const DODGE_INVULN_START: int = 1
-const DODGE_INVULN_END: int = 15
+const DODGE_TOTAL: int = 16
+const DODGE_INVULN_START: int = 2
+const DODGE_INVULN_END: int = 6
+const DODGE_COOLDOWN_FRAMES: int = 24
 
 const JAB_STARTUP: int = 3
 const JAB_ACTIVE: int = 2
@@ -192,6 +194,11 @@ func apply_input(input_data: Dictionary, delta: float) -> void:
 		ground_velocity_x = 0.0
 		return
 
+	dodge_cooldown_frames = maxi(
+		dodge_cooldown_frames - 1,
+		0
+	)
+
 	var input_axis: float = clampf(move.x, -1.0, 1.0)
 	var target_speed: float = input_axis * move_speed
 
@@ -240,7 +247,11 @@ func apply_input(input_data: Dictionary, delta: float) -> void:
 	blocking = bool(input_data.get("block", false))
 	dodge_requested = bool(input_data.get("dodge", false))
 
-	if dodge_requested and state == MoveState.IDLE:
+	if (
+		dodge_requested
+		and state == MoveState.IDLE
+		and dodge_cooldown_frames == 0
+	):
 		state = MoveState.DODGE
 		frames_left = DODGE_TOTAL
 		attack_active = false
@@ -352,6 +363,7 @@ func step_state_machine() -> void:
 			if frames_left <= 0:
 				invulnerable = false
 				state = MoveState.IDLE
+				dodge_cooldown_frames = DODGE_COOLDOWN_FRAMES
 
 		MoveState.HURT:
 			attack_active = false

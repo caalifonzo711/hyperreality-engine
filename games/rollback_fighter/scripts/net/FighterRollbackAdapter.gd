@@ -26,6 +26,7 @@ const DEBUG_STATE_FIELDS := [
 	["p1.hit_confirmed", "p1", "hc"], ["p1.facing", "p1", "fa"],
 	["p1.blocking", "p1", "blk"], ["p1.invulnerable", "p1", "inv"],
 	["p1.dodge_requested", "p1", "dreq"], ["p1.hurt_frames", "p1", "hurt"],
+	["p1.dodge_cooldown_frames", "p1", "dcd"],
 	["p1.attack_active", "p1", "aa"], ["p1.is_touching_wall", "p1", "wall"],
 
 	["p2.position.x", "p2", "x"], ["p2.position.y", "p2", "y"],
@@ -37,6 +38,7 @@ const DEBUG_STATE_FIELDS := [
 	["p2.hit_confirmed", "p2", "hc"], ["p2.facing", "p2", "fa"],
 	["p2.blocking", "p2", "blk"], ["p2.invulnerable", "p2", "inv"],
 	["p2.dodge_requested", "p2", "dreq"], ["p2.hurt_frames", "p2", "hurt"],
+	["p2.dodge_cooldown_frames", "p2", "dcd"],
 	["p2.attack_active", "p2", "aa"], ["p2.is_touching_wall", "p2", "wall"],
 
 	["buffer.p1.light", "buf", "p1_l"], ["buffer.p1.heavy", "buf", "p1_h"],
@@ -45,6 +47,10 @@ const DEBUG_STATE_FIELDS := [
 	["combat.hitstop", "combat", "hitstop"],
 	["combat.match_over", "combat", "match_over"],
 	["combat.winner_id", "combat", "winner_id"],
+	["combat.combo_hits.p1", "combat", "combo_hits_1"],
+	["combat.combo_hits.p2", "combat", "combo_hits_2"],
+	["combat.guard_units.p1", "combat", "guard_units_1"],
+	["combat.guard_units.p2", "combat", "guard_units_2"],
 	["combat.light_cooldown.p1", "combat", "light_cd_1"],
 	["combat.light_cooldown.p2", "combat", "light_cd_2"],
 	["combat.heavy_cooldown.p1", "combat", "heavy_cd_1"],
@@ -306,6 +312,7 @@ func _snap(ps: PlayerState) -> Dictionary:
 		# dodging
 		"inv": ps.invulnerable,
 		"dreq": ps.dodge_requested,
+		"dcd": ps.dodge_cooldown_frames,
 		
 		# hurt ouchie
 "hurt": ps.hurt_frames,
@@ -341,6 +348,7 @@ func _restore(ps: PlayerState, d: Dictionary) -> void:
 	ps.blocking       = bool(d.get("blk", false))
 	ps.invulnerable   = bool(d.get("inv", false))
 	ps.dodge_requested = bool(d.get("dreq", false))
+	ps.dodge_cooldown_frames = int(d.get("dcd", 0))
 	
 	#hurt owie
 	ps.hurt_frames = int(d.get("hurt", 0))
