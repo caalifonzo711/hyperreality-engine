@@ -98,10 +98,9 @@ var _last_render_physics_ticks: int = 0
 
 const CAMERA_FIXED_Y := 200.0
 const CAMERA_FOLLOW_SPEED := 8.0
-const CAMERA_ZOOM_SPEED := 6.0
-const CAMERA_MAX_ZOOM := 1.25
-const CAMERA_MIN_ZOOM := 1.00
-const CAMERA_HORIZONTAL_PADDING := 160.0
+const CAMERA_FIXED_ZOOM := 1.25
+const CAMERA_LEFT_SAFE_RATIO := 0.25
+const CAMERA_RIGHT_SAFE_RATIO := 0.75
 const HURTBOX_FILL_COLOR := Color(0.15, 0.45, 1.0, 0.22)
 const HURTBOX_LINE_COLOR := Color(0.25, 0.65, 1.0, 0.95)
 const HITBOX_FILL_COLOR := Color(1.0, 0.1, 0.1, 0.28)
@@ -1287,28 +1286,35 @@ func _update_camera(delta: float) -> void:
 
 	var p1_x: float = p1_placeholder.position.x
 	var p2_x: float = p2_placeholder.position.x
-	var midpoint_x: float = (p1_x + p2_x) * 0.5
-	var follow_weight: float = 1.0 - exp(-CAMERA_FOLLOW_SPEED * delta)
-
-	cam.position.x = lerpf(cam.position.x, midpoint_x, follow_weight)
 	cam.position.y = CAMERA_FIXED_Y
 	cam.offset = Vector2.ZERO
+	cam.zoom = Vector2.ONE * CAMERA_FIXED_ZOOM
 
-	var horizontal_separation: float = absf(p2_x - p1_x)
 	var viewport_width: float = get_viewport_rect().size.x
-	var usable_width: float = maxf(
-		viewport_width - CAMERA_HORIZONTAL_PADDING,
-		1.0
+	var visible_width: float = viewport_width / CAMERA_FIXED_ZOOM
+	var visible_left: float = cam.position.x - visible_width * 0.5
+	var visible_right: float = cam.position.x + visible_width * 0.5
+	var left_safe_edge: float = lerpf(
+		visible_left,
+		visible_right,
+		CAMERA_LEFT_SAFE_RATIO
 	)
-	var target_zoom: float = clampf(
-		usable_width / maxf(horizontal_separation, 1.0),
-		CAMERA_MIN_ZOOM,
-		CAMERA_MAX_ZOOM
+	var right_safe_edge: float = lerpf(
+		visible_left,
+		visible_right,
+		CAMERA_RIGHT_SAFE_RATIO
 	)
-	var zoom_weight: float = 1.0 - exp(-CAMERA_ZOOM_SPEED * delta)
-	var smoothed_zoom: float = lerpf(cam.zoom.x, target_zoom, zoom_weight)
+	var leftmost_fighter_x: float = minf(p1_x, p2_x)
+	var rightmost_fighter_x: float = maxf(p1_x, p2_x)
+	var target_camera_x: float = cam.position.x
 
-	cam.zoom = Vector2.ONE * smoothed_zoom
+	if rightmost_fighter_x > right_safe_edge:
+		target_camera_x += rightmost_fighter_x - right_safe_edge
+	elif leftmost_fighter_x < left_safe_edge:
+		target_camera_x += leftmost_fighter_x - left_safe_edge
+
+	var follow_weight: float = 1.0 - exp(-CAMERA_FOLLOW_SPEED * delta)
+	cam.position.x = lerpf(cam.position.x, target_camera_x, follow_weight)
 
 
 func _update_health_tint() -> void:
