@@ -7,12 +7,15 @@ var p2_state: PlayerState
 var input_sys: Node
 var lean_sys: Node
 var combat_sys: Node
+var _game_rules_definition: RollbackFighterGameRulesDefinition = null
 
-# ----------------------------
-# Deterministic input buffering
-# ----------------------------
-const LIGHT_BUFFER_FRAMES: int = 3
-const HEAVY_BUFFER_FRAMES: int = 3
+var _light_buffer_frames: int = 0
+var _heavy_buffer_frames: int = 0
+var _world_contact_enabled: bool = false
+var _world_contact_left: float = 0.0
+var _world_contact_right: float = 0.0
+var _world_contact_top: float = 0.0
+var _world_contact_bottom: float = 0.0
 
 # Diagnostic-only canonical order:
 # [display name, snapshot section, snapshot key].
@@ -69,12 +72,27 @@ var first_debug_local: String = ""
 var first_debug_remote: String = ""
 
 
-func setup(_p1: PlayerState, _p2: PlayerState, _input: Node, _lean: Node, _combat: Node) -> void:
+func setup(
+	_p1: PlayerState,
+	_p2: PlayerState,
+	_input: Node,
+	_lean: Node,
+	_combat: Node,
+	_game_rules: RollbackFighterGameRulesDefinition
+) -> void:
 	p1_state = _p1
 	p2_state = _p2
 	input_sys = _input
 	lean_sys  = _lean
 	combat_sys = _combat
+	_game_rules_definition = _game_rules
+	_light_buffer_frames = _game_rules.get_int("light_input_buffer_frames")
+	_heavy_buffer_frames = _game_rules.get_int("heavy_input_buffer_frames")
+	_world_contact_enabled = _game_rules.is_world_contact_enabled()
+	_world_contact_left = float(_game_rules.get_world_contact_bound("left"))
+	_world_contact_right = float(_game_rules.get_world_contact_bound("right"))
+	_world_contact_top = float(_game_rules.get_world_contact_bound("top"))
+	_world_contact_bottom = float(_game_rules.get_world_contact_bound("bottom"))
 
 
 func simulate(local: Dictionary, remote: Dictionary, dt: float) -> void:
@@ -99,26 +117,29 @@ func simulate(local: Dictionary, remote: Dictionary, dt: float) -> void:
 func _derive_wall_contact(ps: PlayerState) -> void:
 	if ps == null:
 		return
+	if not _world_contact_enabled:
+		ps.is_touching_wall = false
+		return
 
 	ps.is_touching_wall = (
-		ps.position.x <= 0.0
-		or ps.position.x >= 800.0
-		or ps.position.y <= 0.0
-		or ps.position.y >= 400.0
+		ps.position.x <= _world_contact_left
+		or ps.position.x >= _world_contact_right
+		or ps.position.y <= _world_contact_top
+		or ps.position.y >= _world_contact_bottom
 	)
 
 
 func _update_buffers(local: Dictionary, remote: Dictionary) -> void:
 	# If input says "atk_l/atk_h" this frame, prime the buffer
 	if bool(local.get("atk_l", false)):
-		_p1_light_buf = LIGHT_BUFFER_FRAMES
+		_p1_light_buf = _light_buffer_frames
 	if bool(local.get("atk_h", false)):
-		_p1_heavy_buf = HEAVY_BUFFER_FRAMES
+		_p1_heavy_buf = _heavy_buffer_frames
 
 	if bool(remote.get("atk_l", false)):
-		_p2_light_buf = LIGHT_BUFFER_FRAMES
+		_p2_light_buf = _light_buffer_frames
 	if bool(remote.get("atk_h", false)):
-		_p2_heavy_buf = HEAVY_BUFFER_FRAMES
+		_p2_heavy_buf = _heavy_buffer_frames
 
 
 func _consume_buffer(is_p1: bool) -> Dictionary:

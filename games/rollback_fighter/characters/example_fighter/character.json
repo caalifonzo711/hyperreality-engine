@@ -1,0 +1,34 @@
+{
+  "config_version": 1,
+  "identity": {
+    "id": "example_fighter",
+    "display_name": "Example Fighter"
+  },
+  "health": { "max_hp": 100 },
+  "movement": {
+    "move_speed": 320,
+    "acceleration": 14400,
+    "braking": 19200,
+    "reversal_acceleration": 28800,
+    "knockback_friction": 900,
+    "max_knockback_speed": 1100
+  },
+  "hurtbox": { "x": -10, "y": -48, "width": 20, "height": 48 },
+  "guard": {
+    "max_units": 300,
+    "held_drain_per_frame": 1,
+    "regen_per_frame": 1,
+    "break_refill_units": 150,
+    "break_stun_frames": 24
+  },
+  "dodge": {
+    "total_frames": 16,
+    "invuln_start": 2,
+    "invuln_end": 6,
+    "cooldown_frames": 24
+  },
+  "moves": {
+    "light": "moves/jab.json",
+    "heavy": "moves/heavy.json"
+  }
+}

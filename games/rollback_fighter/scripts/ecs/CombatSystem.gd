@@ -8,96 +8,11 @@ class_name CombatSystem
 
 var p1_state: PlayerState = null
 var p2_state: PlayerState = null
-
-
-# =================================================
-# Hitbox profiles
-# =================================================
-
-const JAB_HITBOX_PATH := \
-	"res://games/rollback_fighter/characters/example_fighter/hitboxes/jab.json"
-
-const HEAVY_HITBOX_PATH := \
-	"res://games/rollback_fighter/characters/example_fighter/hitboxes/heavy.json"
-
-var _jab_profile: HitboxProfile = HitboxProfile.new()
-var _heavy_profile: HitboxProfile = HitboxProfile.new()
-
-var _jab_loaded: bool = false
-var _heavy_loaded: bool = false
-
-
-# =================================================
-# Damage / tuning
-# =================================================
-
-const LIGHT_DMG: int = 7
-const HEAVY_DMG: int = 14
-
-
-# =================================================
-# Temporary fallback combat ranges
-#
-# Heavy can continue using the old range test until
-# you author a heavy.json.
-# =================================================
-
-const HURTBOX_HALF: float = 8.0
-const LIGHT_REACH: float = 24.0
-const HEAVY_REACH: float = 56.0
-
-
-# =================================================
-# Default deterministic body hurtbox
-#
-# Temporary until you make idle/walk/block/etc
-# hurtbox profiles.
-#
-# Coordinates are relative to PlayerState.position.
-# =================================================
-
-const BODY_HURTBOX_X: int = -10
-const BODY_HURTBOX_Y: int = -48
-const BODY_HURTBOX_W: int = 20
-const BODY_HURTBOX_H: int = 48
-
-
-# =================================================
-# Cooldowns
-# =================================================
-
-const LIGHT_COOLDOWN_FRAMES: int = 6
-const HEAVY_COOLDOWN_FRAMES: int = 12
-
-
-# =================================================
-# Knockback
-# =================================================
-
-const KNOCK_X_LIGHT: float = 220.0
-const KNOCK_X_HEAVY: float = 600.0
-
-
-# =================================================
-# Hitstop
-# =================================================
-
-const HITSTOP_LIGHT: int = 3
-const HITSTOP_HEAVY: int = 7
-
-const HITSTUN_LIGHT: int = 9
-const HITSTUN_HEAVY: int = 12
-
-const HITSTUN_SCALE_PERCENT := [100, 85, 70, 55]
-const KNOCKBACK_SCALE_PERCENT := [100, 115, 135, 160]
-
-const GUARD_MAX_UNITS: int = 300
-const GUARD_HOLD_DRAIN_UNITS: int = 1
-const GUARD_REGEN_UNITS: int = 1
-const GUARD_DAMAGE_LIGHT_UNITS: int = 30
-const GUARD_DAMAGE_HEAVY_UNITS: int = 90
-const GUARD_BREAK_REFILL_UNITS: int = 150
-const GUARD_BREAK_HURT_FRAMES: int = 24
+var _p1_character_definition: RollbackFighterCharacterDefinition = null
+var _p2_character_definition: RollbackFighterCharacterDefinition = null
+var _game_rules_definition: RollbackFighterGameRulesDefinition = null
+var _hitstun_scale_percent: Array = []
+var _knockback_scale_percent: Array = []
 
 
 # =================================================
@@ -124,37 +39,31 @@ var _combo_hits := {
 }
 
 var _guard_units := {
-	1: GUARD_MAX_UNITS,
-	2: GUARD_MAX_UNITS,
+	1: 0,
+	2: 0,
 }
 
 
 # =================================================
-# Startup
+# Character definition injection
 # =================================================
 
-func _ready() -> void:
-	_load_hitbox_profiles()
-
-
-func _load_hitbox_profiles() -> void:
-	_jab_loaded = _jab_profile.load_from_file(
-		JAB_HITBOX_PATH
+func configure_character_definitions(
+	p1_definition: RollbackFighterCharacterDefinition,
+	p2_definition: RollbackFighterCharacterDefinition,
+	game_rules_definition: RollbackFighterGameRulesDefinition
+) -> void:
+	_p1_character_definition = p1_definition
+	_p2_character_definition = p2_definition
+	_game_rules_definition = game_rules_definition
+	_hitstun_scale_percent = game_rules_definition.get_int_array(
+		"combo_hitstun_percent"
 	)
-
-	# Heavy profile is optional for now.
-	# If heavy.json doesn't exist, heavy uses the old
-	# deterministic 1-D range check.
-	_heavy_loaded = _heavy_profile.load_from_file(
-		HEAVY_HITBOX_PATH
+	_knockback_scale_percent = game_rules_definition.get_int_array(
+		"combo_knockback_percent"
 	)
-
-	print(
-		"[Combat] jab_hitboxes=",
-		_jab_loaded,
-		" heavy_hitboxes=",
-		_heavy_loaded
-	)
+	_guard_units[1] = p1_definition.get_int("guard_max_units")
+	_guard_units[2] = p2_definition.get_int("guard_max_units")
 
 
 # =================================================
@@ -220,73 +129,41 @@ func _eval_attacks(
 	if attacker.hit_confirmed:
 		return
 
-	var dmg: int = LIGHT_DMG
-	var knock_impulse: float = KNOCK_X_LIGHT
-	var hitstop: int = HITSTOP_LIGHT
-	var hitstun: int = HITSTUN_LIGHT
-
-
-	# -----------------------------------------
-	# LIGHT
-	# -----------------------------------------
+	var move_definition: RollbackFighterMoveDefinition = (
+		_get_move_definition(attacker)
+	)
+	if move_definition == null:
+		return
 
 	if attacker.attack_kind == PlayerState.AttackKind.LIGHT:
 		if _light_cd_frames[attacker_id] > 0:
 			return
-
-		dmg = LIGHT_DMG
-		knock_impulse = KNOCK_X_LIGHT
-		hitstop = HITSTOP_LIGHT
-		hitstun = HITSTUN_LIGHT
-
-
-	# -----------------------------------------
-	# HEAVY
-	# -----------------------------------------
-
 	elif attacker.attack_kind == PlayerState.AttackKind.HEAVY:
 		if _heavy_cd_frames[attacker_id] > 0:
 			return
-
-		dmg = HEAVY_DMG
-		knock_impulse = KNOCK_X_HEAVY
-		hitstop = HITSTOP_HEAVY
-		hitstun = HITSTUN_HEAVY
-
 	else:
 		return
 
-
-	# -----------------------------------------
-	# Actual collision test
-	# -----------------------------------------
-
-	if not _attack_connects(attacker, defender):
+	if not _attack_connects(attacker, defender, move_definition):
 		return
-
 
 	_do_damage(
 		attacker,
 		defender,
-		dmg,
-		knock_impulse,
-		hitstop,
-		hitstun
+		move_definition.get_int("damage"),
+		float(move_definition.get_int("knockback_x")),
+		move_definition.get_int("hitstop"),
+		move_definition.get_int("hitstun"),
+		move_definition
 	)
 
-
-	# -----------------------------------------
-	# Cooldown after successful contact
-	# -----------------------------------------
-
 	if attacker.attack_kind == PlayerState.AttackKind.LIGHT:
-		_light_cd_frames[attacker_id] = (
-			LIGHT_COOLDOWN_FRAMES
+		_light_cd_frames[attacker_id] = move_definition.get_int(
+			"contact_cooldown"
 		)
-
 	elif attacker.attack_kind == PlayerState.AttackKind.HEAVY:
-		_heavy_cd_frames[attacker_id] = (
-			HEAVY_COOLDOWN_FRAMES
+		_heavy_cd_frames[attacker_id] = move_definition.get_int(
+			"contact_cooldown"
 		)
 
 
@@ -296,85 +173,102 @@ func _eval_attacks(
 
 func _attack_connects(
 	attacker: PlayerState,
-	defender: PlayerState
+	defender: PlayerState,
+	move_definition: RollbackFighterMoveDefinition
 ) -> bool:
+	var profile: Dictionary = move_definition.get_hitbox_profile()
+	var profile_kind: String = str(profile.get("kind", ""))
 
-	# -----------------------------------------
-	# Authored LIGHT hitbox
-	# -----------------------------------------
-
-	if (
-		attacker.attack_kind
-		== PlayerState.AttackKind.LIGHT
-		and _jab_loaded
-	):
+	if profile_kind == "boxes":
 		return _profile_attack_connects(
 			attacker,
 			defender,
-			_jab_profile
+			profile
 		)
 
-
-	# -----------------------------------------
-	# Authored HEAVY hitbox
-	# -----------------------------------------
-
-	if (
-		attacker.attack_kind
-		== PlayerState.AttackKind.HEAVY
-		and _heavy_loaded
-	):
-		return _profile_attack_connects(
+	if profile_kind == "legacy_horizontal_range":
+		return _legacy_in_range(
 			attacker,
 			defender,
-			_heavy_profile
+			float(int(profile.get("reach", 0))),
+			float(int(profile.get("defender_half_extent", 0)))
 		)
 
-
-	# -----------------------------------------
-	# Fallback old deterministic range check
-	#
-	# This keeps heavy working even before you
-	# author heavy.json.
-	# -----------------------------------------
-
-	var reach := LIGHT_REACH
-
-	if attacker.attack_kind == PlayerState.AttackKind.HEAVY:
-		reach = HEAVY_REACH
-
-	return _legacy_in_range(
-		attacker,
-		defender,
-		reach
-	)
+	return false
 
 
 # =================================================
 # Frame-authored hitbox collision
 # =================================================
 
+func _get_character_definition(
+	fighter: PlayerState
+) -> RollbackFighterCharacterDefinition:
+	return (
+		_p1_character_definition
+		if fighter == p1_state
+		else _p2_character_definition
+	)
+
+
+func _get_move_definition(
+	attacker: PlayerState
+) -> RollbackFighterMoveDefinition:
+	var character_definition: RollbackFighterCharacterDefinition = (
+		_get_character_definition(attacker)
+	)
+	if character_definition == null:
+		return null
+
+	match attacker.attack_kind:
+		PlayerState.AttackKind.LIGHT:
+			return character_definition.get_move_for_slot("light")
+		PlayerState.AttackKind.HEAVY:
+			return character_definition.get_move_for_slot("heavy")
+		_:
+			return null
+
+
+func _get_profile_hitboxes(
+	profile: Dictionary,
+	active_frame: int
+) -> Array:
+	var frames_value: Variant = profile.get("frames", [])
+	if not (frames_value is Array):
+		return []
+	var frames: Array = frames_value
+	for frame_variant in frames:
+		if not (frame_variant is Dictionary):
+			continue
+
+		var frame_data: Dictionary = frame_variant
+		if int(frame_data.get("active_frame", -1)) == active_frame:
+			var hitboxes_value: Variant = frame_data.get("hitboxes", [])
+			if hitboxes_value is Array:
+				return hitboxes_value
+			return []
+
+	return []
+
+
 func _profile_attack_connects(
 	attacker: PlayerState,
 	defender: PlayerState,
-	profile: HitboxProfile
+	profile: Dictionary
 ) -> bool:
-
-	var active_frame := _get_active_frame(attacker)
+	var active_frame: int = _get_active_frame(attacker)
 
 	if active_frame < 0:
 		return false
 
-	var hitboxes: Array = profile.get_hitboxes(
-		active_frame
-	)
+	var hitboxes: Array = _get_profile_hitboxes(profile, active_frame)
 
 	# If you authored no hitbox on this active frame,
 	# the move cannot hit on this frame.
 	if hitboxes.is_empty():
 		return false
 
-	var defender_box := _get_default_body_hurtbox(
+	var defender_box := _get_body_hurtbox(
 		defender
 	)
 
@@ -409,27 +303,13 @@ func _get_active_frame(
 	if attacker.state != PlayerState.MoveState.ACTIVE:
 		return -1
 
-	var total_active: int = 1
+	var move_definition: RollbackFighterMoveDefinition = (
+		_get_move_definition(attacker)
+	)
+	if move_definition == null:
+		return -1
 
-	match attacker.attack_kind:
-		PlayerState.AttackKind.LIGHT:
-			total_active = int(
-				attacker.generated_light_move.get(
-					"active",
-					1
-				)
-			)
-
-		PlayerState.AttackKind.HEAVY:
-			total_active = int(
-				attacker.generated_heavy_move.get(
-					"active",
-					1
-				)
-			)
-
-		_:
-			return -1
+	var total_active: int = move_definition.get_int("active")
 
 	# On first ACTIVE frame:
 	#
@@ -456,10 +336,10 @@ func _make_world_box(
 	local_box: Dictionary
 ) -> Dictionary:
 
-	var x := int(local_box.get("x", 0))
-	var y := int(local_box.get("y", 0))
-	var w := int(local_box.get("w", 1))
-	var h := int(local_box.get("h", 1))
+	var x: int = int(local_box.get("x", 0))
+	var y: int = int(local_box.get("y", 0))
+	var w: int = int(local_box.get("width", 1))
+	var h: int = int(local_box.get("height", 1))
 
 	# Mirror around fighter origin if facing left.
 	if fighter.facing < 0:
@@ -474,26 +354,29 @@ func _make_world_box(
 
 
 # =================================================
-# Temporary body hurtbox
+# Definition-driven body hurtbox
 # =================================================
 
-func _get_default_body_hurtbox(
+func _get_body_hurtbox(
 	fighter: PlayerState
 ) -> Dictionary:
+	var definition: RollbackFighterCharacterDefinition = (
+		_get_character_definition(fighter)
+	)
 
 	return {
 		"x": (
 			roundi(fighter.position.x)
-			+ BODY_HURTBOX_X
+			+ definition.get_int("hurtbox_x")
 		),
 
 		"y": (
 			roundi(fighter.position.y)
-			+ BODY_HURTBOX_Y
+			+ definition.get_int("hurtbox_y")
 		),
 
-		"w": BODY_HURTBOX_W,
-		"h": BODY_HURTBOX_H
+		"w": definition.get_int("hurtbox_width"),
+		"h": definition.get_int("hurtbox_height")
 	}
 
 
@@ -508,7 +391,7 @@ func get_debug_hurtbox_rect(fighter: PlayerState) -> Rect2:
 	if fighter == null:
 		return Rect2()
 
-	var box: Dictionary = _get_default_body_hurtbox(fighter)
+	var box: Dictionary = _get_body_hurtbox(fighter)
 	return Rect2(
 		float(box.get("x", 0)),
 		float(box.get("y", 0)),
@@ -522,7 +405,7 @@ func get_debug_active_light_hitbox_rects(
 ) -> Array[Rect2]:
 	var world_rects: Array[Rect2] = []
 
-	if fighter == null or not _jab_loaded:
+	if fighter == null:
 		return world_rects
 
 	if (
@@ -535,7 +418,17 @@ func get_debug_active_light_hitbox_rects(
 	if active_frame < 0:
 		return world_rects
 
-	for local_box_variant in _jab_profile.get_hitboxes(active_frame):
+	var move_definition: RollbackFighterMoveDefinition = (
+		_get_move_definition(fighter)
+	)
+	if move_definition == null:
+		return world_rects
+
+	var profile: Dictionary = move_definition.get_hitbox_profile()
+	if str(profile.get("kind", "")) != "boxes":
+		return world_rects
+
+	for local_box_variant in _get_profile_hitboxes(profile, active_frame):
 		if not (local_box_variant is Dictionary):
 			continue
 
@@ -587,7 +480,8 @@ func _boxes_overlap(
 func _legacy_in_range(
 	attacker: PlayerState,
 	defender: PlayerState,
-	atk_reach: float
+	atk_reach: float,
+	defender_half_extent: float
 ) -> bool:
 
 	var dx := absf(
@@ -596,7 +490,7 @@ func _legacy_in_range(
 	)
 
 	var max_dist := (
-		HURTBOX_HALF
+		defender_half_extent
 		+ atk_reach
 	)
 
@@ -613,7 +507,8 @@ func _do_damage(
 	dmg: int,
 	knock_impulse: float,
 	hitstop_frames: int,
-	hitstun_frames: int
+	hitstun_frames: int,
+	move_definition: RollbackFighterMoveDefinition
 ) -> void:
 
 	# -----------------------------------------
@@ -625,7 +520,9 @@ func _do_damage(
 
 		attacker.hit_confirmed = true
 
-		_hitstop_frames = 1
+		_hitstop_frames = _game_rules_definition.get_int(
+			"dodge_contact_hitstop"
+		)
 
 		return
 
@@ -640,11 +537,17 @@ func _do_damage(
 
 	var blocked: bool = _is_blocking_front_attack(attacker, defender)
 	if blocked:
-		dmg = int(dmg * 0.2)
+		dmg = _scale_percent_truncate(
+			dmg,
+			_game_rules_definition.get_int("blocked_chip_percent")
+		)
 
-		defender.take_damage(dmg)
+		defender.take_damage(
+			dmg,
+			_game_rules_definition.get_int("blocked_hit_stun_frames")
+		)
 		_hitstop_frames = hitstop_frames
-		_apply_blocked_guard_damage(attacker, defender)
+		_apply_blocked_guard_damage(move_definition, defender)
 
 		print("[Combat] BLOCKED!")
 
@@ -653,14 +556,17 @@ func _do_damage(
 		var combo_hit: int = int(_combo_hits.get(defender_id, 0)) + 1
 		_combo_hits[defender_id] = combo_hit
 
-		var scale_index: int = mini(combo_hit - 1, 3)
+		var scale_index: int = mini(
+			combo_hit - 1,
+			_hitstun_scale_percent.size() - 1
+		)
 		var scaled_hitstun: int = _scale_percent_nearest(
 			hitstun_frames,
-			int(HITSTUN_SCALE_PERCENT[scale_index])
+			int(_hitstun_scale_percent[scale_index])
 		)
 		var scaled_knockback: int = _scale_percent_nearest(
 			roundi(knock_impulse),
-			int(KNOCKBACK_SCALE_PERCENT[scale_index])
+			int(_knockback_scale_percent[scale_index])
 		)
 
 		defender.take_damage(dmg, scaled_hitstun)
@@ -723,19 +629,25 @@ func _scale_percent_nearest(base_value: int, percent: int) -> int:
 	return maxi(1, (base_value * percent + 50) / 100)
 
 
+func _scale_percent_truncate(base_value: int, percent: int) -> int:
+	@warning_ignore("integer_division")
+	return (base_value * percent) / 100
+
+
 # =================================================
 # Guard resource
 # =================================================
 
 func _tick_guard(defender: PlayerState) -> void:
 	var defender_id: int = _get_pid(defender)
-	var guard_units: int = int(
-		_guard_units.get(defender_id, GUARD_MAX_UNITS)
+	var definition: RollbackFighterCharacterDefinition = (
+		_get_character_definition(defender)
 	)
+	var guard_units: int = int(_guard_units[defender_id])
 
 	if defender.state == PlayerState.MoveState.BLOCK:
 		guard_units = maxi(
-			guard_units - GUARD_HOLD_DRAIN_UNITS,
+			guard_units - definition.get_int("guard_held_drain_per_frame"),
 			0
 		)
 		_guard_units[defender_id] = guard_units
@@ -745,22 +657,20 @@ func _tick_guard(defender: PlayerState) -> void:
 
 	elif not defender.blocking:
 		_guard_units[defender_id] = mini(
-			guard_units + GUARD_REGEN_UNITS,
-			GUARD_MAX_UNITS
+			guard_units + definition.get_int("guard_regen_per_frame"),
+			definition.get_int("guard_max_units")
 		)
 
 
 func _apply_blocked_guard_damage(
-	attacker: PlayerState,
+	move_definition: RollbackFighterMoveDefinition,
 	defender: PlayerState
 ) -> void:
-	var guard_damage: int = GUARD_DAMAGE_LIGHT_UNITS
-	if attacker.attack_kind == PlayerState.AttackKind.HEAVY:
-		guard_damage = GUARD_DAMAGE_HEAVY_UNITS
+	var guard_damage: int = move_definition.get_int("guard_damage")
 
 	var defender_id: int = _get_pid(defender)
 	_guard_units[defender_id] = maxi(
-		int(_guard_units.get(defender_id, GUARD_MAX_UNITS))
+		int(_guard_units[defender_id])
 		- guard_damage,
 		0
 	)
@@ -771,9 +681,12 @@ func _apply_blocked_guard_damage(
 
 func _trigger_guard_break(defender: PlayerState) -> void:
 	var defender_id: int = _get_pid(defender)
+	var definition: RollbackFighterCharacterDefinition = (
+		_get_character_definition(defender)
+	)
 	_combo_hits[defender_id] = 0
-	_guard_units[defender_id] = GUARD_BREAK_REFILL_UNITS
-	defender.take_damage(0, GUARD_BREAK_HURT_FRAMES)
+	_guard_units[defender_id] = definition.get_int("guard_break_refill_units")
+	defender.take_damage(0, definition.get_int("guard_break_stun_frames"))
 
 
 # =================================================
@@ -824,8 +737,8 @@ func capture_state() -> Dictionary:
 		"winner_id": winner_id,
 		"combo_hits_1": int(_combo_hits.get(1, 0)),
 		"combo_hits_2": int(_combo_hits.get(2, 0)),
-		"guard_units_1": int(_guard_units.get(1, GUARD_MAX_UNITS)),
-		"guard_units_2": int(_guard_units.get(2, GUARD_MAX_UNITS)),
+		"guard_units_1": int(_guard_units[1]),
+		"guard_units_2": int(_guard_units[2]),
 
 		"light_cd_1": int(
 			_light_cd_frames.get(1, 0)
@@ -853,8 +766,8 @@ func restore_state(s: Dictionary) -> void:
 	winner_id = int(s.get("winner_id", 0))
 	_combo_hits[1] = int(s.get("combo_hits_1", 0))
 	_combo_hits[2] = int(s.get("combo_hits_2", 0))
-	_guard_units[1] = int(s.get("guard_units_1", GUARD_MAX_UNITS))
-	_guard_units[2] = int(s.get("guard_units_2", GUARD_MAX_UNITS))
+	_guard_units[1] = int(s.get("guard_units_1", _guard_units[1]))
+	_guard_units[2] = int(s.get("guard_units_2", _guard_units[2]))
 
 	_light_cd_frames[1] = int(
 		s.get("light_cd_1", 0)

@@ -13,6 +13,7 @@ signal connected()
 signal disconnected()
 signal connection_failed(reason: String)
 signal start_match_received()
+signal match_config_received(identity: Dictionary)
 
 @export var port: int = 7777
 @export var max_clients: int = 1
@@ -111,6 +112,17 @@ func send_packet(packet: Dictionary) -> void:
 		_rpc_receive_packet.rpc_id(1, packet)
 
 
+func send_match_config(identity: Dictionary) -> void:
+	if multiplayer.multiplayer_peer == null or not is_connected:
+		return
+	if is_host:
+		if remote_peer_id == 0:
+			return
+		_rpc_receive_match_config.rpc_id(remote_peer_id, identity.duplicate(true))
+	else:
+		_rpc_receive_match_config.rpc_id(1, identity.duplicate(true))
+
+
 func _should_drop_stress_input_packet(packet: Dictionary) -> bool:
 	if not deterministic_stress_input_loss_enabled:
 		return false
@@ -184,6 +196,40 @@ func send_input_repair_response(
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _rpc_receive_packet(packet: Dictionary) -> void:
 	_queue_or_emit_packet(packet)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_match_config(identity: Dictionary) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id <= 0:
+		push_error("[ENetTransport] Ignored config handshake without a remote sender.")
+		return
+	var expected_sender_id: int = remote_peer_id if is_host else 1
+	if sender_id != expected_sender_id:
+		push_error("[ENetTransport] Ignored config handshake from unexpected peer %d." % sender_id)
+		return
+	if not _is_bounded_match_config(identity):
+		push_error("[ENetTransport] Ignored malformed or oversized config handshake.")
+		return
+	match_config_received.emit(identity.duplicate(true))
+
+
+func _is_bounded_match_config(identity: Dictionary) -> bool:
+	if identity.size() != 8:
+		return false
+	for field in ["protocol_version", "rules_config_version", "p1_config_version", "p2_config_version", "canonical_byte_length"]:
+		if not identity.has(field) or typeof(identity[field]) != TYPE_INT:
+			return false
+	for field in ["p1_id", "p2_id"]:
+		if not identity.has(field) or typeof(identity[field]) != TYPE_STRING:
+			return false
+		if str(identity[field]).length() > 64:
+			return false
+	if not identity.has("digest") or typeof(identity["digest"]) != TYPE_STRING:
+		return false
+	if str(identity["digest"]).length() > 64:
+		return false
+	return true
 
 
 @rpc("any_peer", "call_remote", "reliable")

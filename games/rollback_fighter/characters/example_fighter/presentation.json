@@ -1,0 +1,79 @@
+{
+  "config_version": 1,
+  "fighter_id": "example_fighter",
+  "source_art_faces": "left",
+  "animations": {
+    "idle": {
+      "playback": "loop_fps",
+      "fps_milli": 8000,
+      "frames": [
+        { "sprite": "sprites/idle_0.png", "feet_anchor": { "x": 288, "y": 416 }, "scale_milli": 135 },
+        { "sprite": "sprites/idle_1.png", "feet_anchor": { "x": 288, "y": 416 }, "scale_milli": 135 }
+      ]
+    },
+    "jab": {
+      "playback": "attack_phase_map",
+      "fps_milli": 12000,
+      "frames": [
+        { "sprite": "sprites/jab_0.png", "feet_anchor": { "x": 646, "y": 589 }, "scale_milli": 108 },
+        { "sprite": "sprites/jab_1.png", "feet_anchor": { "x": 647, "y": 589 }, "scale_milli": 108 }
+      ]
+    },
+    "heavy": {
+      "playback": "attack_phase_map",
+      "fps_milli": 10000,
+      "frames": [
+        { "sprite": "sprites/jab_0.png", "feet_anchor": { "x": 646, "y": 589 }, "scale_milli": 108 },
+        { "sprite": "sprites/jab_1.png", "feet_anchor": { "x": 647, "y": 589 }, "scale_milli": 108 }
+      ]
+    },
+    "block": {
+      "playback": "hold",
+      "fps_milli": 8000,
+      "frames": [
+        { "sprite": "sprites/hero_block_0.png", "feet_anchor": { "x": 279, "y": 416 }, "scale_milli": 135 }
+      ]
+    },
+    "dodge": {
+      "playback": "state_stretched",
+      "fps_milli": 12000,
+      "frames": [
+        { "sprite": "sprites/hero_spot_dodge1.png", "feet_anchor": { "x": 335, "y": 413 }, "scale_milli": 135 },
+        { "sprite": "sprites/hero_spot_dodge2.png", "feet_anchor": { "x": 280, "y": 416 }, "scale_milli": 135 }
+      ]
+    },
+    "hit": {
+      "playback": "hold",
+      "fps_milli": 12000,
+      "frames": [
+        { "sprite": "sprites/hero_hit_0.png", "feet_anchor": { "x": 284, "y": 402 }, "scale_milli": 138 }
+      ]
+    },
+    "dead": {
+      "playback": "hold",
+      "fps_milli": 1000,
+      "frames": [
+        { "sprite": "sprites/hero_dead_0.png", "feet_anchor": { "x": 252, "y": 471 }, "scale_milli": 118 }
+      ]
+    }
+  },
+  "state_to_animation": {
+    "idle": "idle",
+    "block": "block",
+    "dodge": "dodge",
+    "hurt": "hit",
+    "dead": "dead"
+  },
+  "attack_phase_to_frames": {
+    "jab": {
+      "startup": [0],
+      "active": [1],
+      "recovery": [0]
+    },
+    "heavy": {
+      "startup": [0],
+      "active": [1],
+      "recovery": [0]
+    }
+  }
+}

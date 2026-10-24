@@ -69,11 +69,36 @@ const ENetTransportScene = preload("res://games/rollback_fighter/scripts/net/ENe
 const CombatFuzzBenchmarkScript = preload(
 	"res://games/rollback_fighter/scripts/qa/CombatFuzzBenchmark.gd"
 )
+const CharacterDefinitionLoaderScript = preload(
+	"res://games/rollback_fighter/scripts/config/CharacterDefinitionLoader.gd"
+)
+const CanonicalConfigWriterScript = preload(
+	"res://games/rollback_fighter/scripts/config/CanonicalConfigWriter.gd"
+)
+const MatchConfigHandshakeScript = preload(
+	"res://games/rollback_fighter/scripts/config/MatchConfigHandshake.gd"
+)
+
+const CHARACTER_REGISTRY_PATH := \
+	"res://games/rollback_fighter/config/builtin_fighters.json"
+const GAME_RULES_CONFIG_PATH := \
+	"res://games/rollback_fighter/config/game_rules.json"
+const ACTIVE_FIGHTER_ID := "example_fighter"
 
 
 var rollback_session: Node = null
 var transport: Node = null
 var local_player_id: int = 1
+var _game_rules_definition: RollbackFighterGameRulesDefinition = null
+var _p1_character_definition: RollbackFighterCharacterDefinition = null
+var _p2_character_definition: RollbackFighterCharacterDefinition = null
+var _match_config_handshake: RollbackFighterMatchConfigHandshake = (
+	MatchConfigHandshakeScript.new()
+)
+var _local_match_config_identity: Dictionary = {}
+var _config_handshake_sent: bool = false
+var _remote_config_identity_received: bool = false
+var _pending_start_match_received: bool = false
 
 var benchmark_running: bool = false
 var benchmark_complete: bool = false
@@ -166,6 +191,23 @@ var _presentation_max_prediction_lead: int = 0
 
 func _ready() -> void:
 	print("[Arena] _ready")
+	if not _load_authoritative_fighter_definitions():
+		push_error(
+			"[CharacterDefinition] Match setup stopped: "
+			+ "authoritative fighter definitions failed to load."
+		)
+		if play_status_label != null:
+			play_status_label.text = "CHARACTER CONFIG ERROR"
+		set_physics_process(false)
+		return
+
+	player_state.configure_character_definition(_p1_character_definition)
+	opponent_state.configure_character_definition(_p2_character_definition)
+	combat_system.configure_character_definitions(
+		_p1_character_definition,
+		_p2_character_definition,
+		_game_rules_definition
+	)
 
 	add_child(player_state)
 	add_child(opponent_state)
@@ -179,12 +221,26 @@ func _ready() -> void:
 	add_child(_combat_box_overlay)
 	_combat_box_overlay.draw.connect(_draw_runtime_combat_boxes)
 
-	player_state.position = Vector2(200, 250)
-	opponent_state.position = Vector2(600, 250)
+	player_state.position = Vector2(
+		_game_rules_definition.get_spawn_position("p1")
+	)
+	opponent_state.position = Vector2(
+		_game_rules_definition.get_spawn_position("p2")
+	)
 
 	_ensure_opponent_placeholder()
-	p1_sprite_debug = _bind_sprite_to_state(p1_placeholder, player_state, "P1")
-	p2_sprite_debug = _bind_sprite_to_state(p2_placeholder, opponent_state, "P2")
+	p1_sprite_debug = _bind_sprite_to_state(
+		p1_placeholder,
+		player_state,
+		_p1_character_definition,
+		"P1"
+	)
+	p2_sprite_debug = _bind_sprite_to_state(
+		p2_placeholder,
+		opponent_state,
+		_p2_character_definition,
+		"P2"
+	)
 
 	if not RenderingServer.frame_pre_draw.is_connected(_on_frame_pre_draw):
 		RenderingServer.frame_pre_draw.connect(_on_frame_pre_draw)
@@ -194,7 +250,14 @@ func _ready() -> void:
 	combat_system.p2_state = opponent_state
 
 	add_child(adapter)
-	adapter.setup(player_state, opponent_state, input_system, lean_system, combat_system)
+	adapter.setup(
+		player_state,
+		opponent_state,
+		input_system,
+		lean_system,
+		combat_system,
+		_game_rules_definition
+	)
 
 	if USE_ENET:
 		transport = ENetTransportScene.new()
@@ -238,6 +301,18 @@ func _ready() -> void:
 	if transport != null and transport.has_signal("start_match_received"):
 		if not transport.start_match_received.is_connected(_on_start_match_received):
 			transport.start_match_received.connect(_on_start_match_received)
+	if USE_ENET and transport != null:
+		if transport.has_signal("match_config_received"):
+			if not transport.match_config_received.is_connected(
+				_on_match_config_received
+			):
+				transport.match_config_received.connect(
+					_on_match_config_received
+				)
+		if transport.has_signal("connected"):
+			if not transport.connected.is_connected(_on_transport_connected):
+				transport.connected.connect(_on_transport_connected)
+		_begin_config_handshake()
 
 	var enabled_benchmark_count: int = (
 		int(QA_BOT_BENCHMARK_ENABLED)
@@ -254,6 +329,280 @@ func _ready() -> void:
 		_benchmark_duration_frames()
 	])
 	_reset_presentation_measurement(false)
+
+
+func _load_authoritative_fighter_definitions() -> bool:
+	var loader: RollbackFighterCharacterDefinitionLoader = (
+		CharacterDefinitionLoaderScript.new()
+	)
+	var rules_result: Dictionary = loader.load_game_rules(
+		GAME_RULES_CONFIG_PATH
+	)
+	var p1_result: Dictionary = loader.load_builtin_fighter(
+		CHARACTER_REGISTRY_PATH,
+		ACTIVE_FIGHTER_ID
+	)
+	var p2_result: Dictionary = loader.load_builtin_fighter(
+		CHARACTER_REGISTRY_PATH,
+		ACTIVE_FIGHTER_ID
+	)
+
+	var errors: Array = []
+	if not bool(rules_result.get("ok", false)):
+		errors.append_array(rules_result.get("errors", []))
+	if not bool(p1_result.get("ok", false)):
+		errors.append_array(p1_result.get("errors", []))
+	if not bool(p2_result.get("ok", false)):
+		errors.append_array(p2_result.get("errors", []))
+
+	if not errors.is_empty():
+		push_error(
+			"[CharacterDefinition] AUTHORITATIVE FIGHTER LOAD FAILED "
+			+ "(%d error(s))." % errors.size()
+		)
+		for error_variant in errors:
+			print(loader.format_error(error_variant))
+		return false
+
+	_game_rules_definition = rules_result["definition"]
+	_p1_character_definition = p1_result["definition"]
+	_p2_character_definition = p2_result["definition"]
+	var writer: RollbackFighterCanonicalConfigWriter = (
+		CanonicalConfigWriterScript.new()
+	)
+	_local_match_config_identity = _match_config_handshake.build_local_identity(
+		writer,
+		_game_rules_definition,
+		_p1_character_definition,
+		_p2_character_definition
+	)
+	_match_config_handshake.local_identity = (
+		_local_match_config_identity.duplicate(true)
+	)
+	var canonical_byte_length: int = int(
+		_local_match_config_identity["canonical_byte_length"]
+	)
+	var digest: String = str(_local_match_config_identity["digest"])
+	print("[ConfigHandshake] local digest ready")
+	print("protocol_version=%d rules_config_version=%d p1_config_version=%d p2_config_version=%d" % [
+		int(_local_match_config_identity["protocol_version"]),
+		int(_local_match_config_identity["rules_config_version"]),
+		int(_local_match_config_identity["p1_config_version"]),
+		int(_local_match_config_identity["p2_config_version"]),
+	])
+	print("digest=%s" % digest)
+	print("p1=%s" % str(_local_match_config_identity["p1_id"]))
+	print("p2=%s" % str(_local_match_config_identity["p2_id"]))
+	print("[CharacterDefinition] authoritative fighter mode active")
+	_print_fighter_definition_summary("P1", _p1_character_definition)
+	_print_fighter_definition_summary("P2", _p2_character_definition)
+	_print_presentation_summary(_p1_character_definition)
+	_print_game_rules_summary(_game_rules_definition)
+	print("attacks:")
+	print("light=%s" % _attack_definition_summary(
+		_p1_character_definition.get_move_for_slot("light")
+	))
+	print("heavy=%s" % _attack_definition_summary(
+		_p1_character_definition.get_move_for_slot("heavy")
+	))
+	print("config_version=%d" % _p1_character_definition.get_config_version())
+	print("canonical_byte_length=%d" % canonical_byte_length)
+	print("auth_digest=%s" % digest)
+	if OS.is_debug_build():
+		print("normalized_authoritative_config:\n%s" % writer.normalized_dump(
+			_game_rules_definition,
+			_p1_character_definition
+		))
+	return true
+
+
+func _on_transport_connected() -> void:
+	_begin_config_handshake()
+
+
+func _begin_config_handshake() -> void:
+	if not USE_ENET or transport == null or _config_handshake_sent:
+		return
+	if not bool(transport.get("is_connected")):
+		return
+	if bool(transport.get("is_host")) and int(transport.get("remote_peer_id")) <= 0:
+		return
+	if not transport.has_method("send_match_config"):
+		_fail_config_handshake("Transport does not support config compatibility checks.")
+		return
+	_config_handshake_sent = true
+	transport.send_match_config(_local_match_config_identity)
+	print("[ConfigHandshake] local identity sent to connected peer")
+
+
+func _on_match_config_received(remote_identity: Dictionary) -> void:
+	if _match_config_handshake.failed:
+		return
+	if _remote_config_identity_received:
+		if remote_identity == _match_config_handshake.remote_identity:
+			return
+		_fail_config_handshake(
+			"Peer sent conflicting config identities during one match startup."
+		)
+		return
+	_remote_config_identity_received = true
+	var remote_digest: String = str(remote_identity.get("digest", "<invalid>"))
+	print("[ConfigHandshake] remote digest received")
+	print("digest=%s" % remote_digest)
+	var result: Dictionary = _match_config_handshake.accept_remote_identity(
+		remote_identity
+	)
+	if not bool(result.get("ok", false)):
+		_fail_config_handshake(str(result.get("message", "CONFIG MISMATCH")))
+		return
+	print("[ConfigHandshake] MATCH CONFIG VERIFIED")
+	if _pending_start_match_received:
+		_pending_start_match_received = false
+		call_deferred("_on_start_match_received")
+
+
+func _fail_config_handshake(message: String) -> void:
+	_match_config_handshake.failed = true
+	_match_config_handshake.verified = false
+	_match_config_handshake.failure_message = message
+	var local_digest: String = str(_local_match_config_identity.get("digest", "<unavailable>"))
+	var remote_digest: String = str(
+		_match_config_handshake.remote_identity.get("digest", "<unavailable>")
+	)
+	var remote_p1: String = str(
+		_match_config_handshake.remote_identity.get("p1_id", "<invalid>")
+	)
+	var remote_p2: String = str(
+		_match_config_handshake.remote_identity.get("p2_id", "<invalid>")
+	)
+	var diagnostic: String = (
+		("[Arena] CONFIG MISMATCH: %s\nlocal_digest=%s\nremote_digest=%s\n"
+		+ "local_p1=%s\nlocal_p2=%s\nremote_p1=%s\nremote_p2=%s")
+		% [
+			message,
+			local_digest,
+			remote_digest,
+			str(_local_match_config_identity.get("p1_id", "<unavailable>")),
+			str(_local_match_config_identity.get("p2_id", "<unavailable>")),
+			remote_p1,
+			remote_p2,
+		]
+	)
+	push_error(diagnostic)
+	if play_status_label != null:
+		play_status_label.text = "CONFIG MISMATCH\nLocal: %s\nRemote: %s" % [
+			local_digest,
+			remote_digest,
+		]
+
+
+func _print_presentation_summary(
+	definition: RollbackFighterCharacterDefinition
+) -> void:
+	var presentation: RollbackFighterPresentationDefinition = (
+		definition.get_presentation()
+	)
+	print("[PresentationDefinition] active")
+	print("fighter=%s" % definition.get_id())
+	print("source_art_faces=%s" % presentation.get_source_art_faces())
+	for animation_id in ["idle", "jab", "heavy", "block", "dodge", "hit", "dead"]:
+		var animation: Dictionary = presentation.get_animation(animation_id)
+		var frames: Array = animation.get("frames", [])
+		print("%s_frames=%d" % [animation_id, frames.size()])
+
+
+func _print_game_rules_summary(
+	rules: RollbackFighterGameRulesDefinition
+) -> void:
+	var p1_spawn: Vector2i = rules.get_spawn_position("p1")
+	var p2_spawn: Vector2i = rules.get_spawn_position("p2")
+	print("[GameRulesDefinition] authoritative rules mode active")
+	print("simulation_hz=%d" % rules.get_int("simulation_hz"))
+	print("input_buffers=%d,%d" % [
+		rules.get_int("light_input_buffer_frames"),
+		rules.get_int("heavy_input_buffer_frames"),
+	])
+	print("combo_hitstun=%s" % _join_rule_ints(
+		rules.get_int_array("combo_hitstun_percent")
+	))
+	print("combo_knockback=%s" % _join_rule_ints(
+		rules.get_int_array("combo_knockback_percent")
+	))
+	print("blocked_chip_percent=%d" % rules.get_int("blocked_chip_percent"))
+	print("blocked_hit_stun_frames=%d" % rules.get_int(
+		"blocked_hit_stun_frames"
+	))
+	print("dodge_contact_hitstop=%d" % rules.get_int(
+		"dodge_contact_hitstop"
+	))
+	print("spawn_p1=%d,%d" % [p1_spawn.x, p1_spawn.y])
+	print("spawn_p2=%d,%d" % [p2_spawn.x, p2_spawn.y])
+	print("world_contact=%s,%d,%d,%d,%d" % [
+		str(rules.is_world_contact_enabled()),
+		rules.get_world_contact_bound("left"),
+		rules.get_world_contact_bound("right"),
+		rules.get_world_contact_bound("top"),
+		rules.get_world_contact_bound("bottom"),
+	])
+	print("fallback_policy=%s" % rules.get_fallback_policy())
+
+
+func _join_rule_ints(values: Array) -> String:
+	var parts := PackedStringArray()
+	for value in values:
+		parts.append(str(int(value)))
+	return ",".join(parts)
+
+
+func _print_fighter_definition_summary(
+	label: String,
+	definition: RollbackFighterCharacterDefinition
+) -> void:
+	print("%s fighter=%s" % [label, definition.get_id()])
+	print("hp=%d" % definition.get_int("max_hp"))
+	print("movement=%d,%d,%d,%d,%d,%d" % [
+		definition.get_int("move_speed"),
+		definition.get_int("acceleration"),
+		definition.get_int("braking"),
+		definition.get_int("reversal_acceleration"),
+		definition.get_int("knockback_friction"),
+		definition.get_int("max_knockback_speed"),
+	])
+	print("hurtbox=%d,%d,%d,%d" % [
+		definition.get_int("hurtbox_x"),
+		definition.get_int("hurtbox_y"),
+		definition.get_int("hurtbox_width"),
+		definition.get_int("hurtbox_height"),
+	])
+	print("guard=%d,%d,%d,%d,%d" % [
+		definition.get_int("guard_max_units"),
+		definition.get_int("guard_held_drain_per_frame"),
+		definition.get_int("guard_regen_per_frame"),
+		definition.get_int("guard_break_refill_units"),
+		definition.get_int("guard_break_stun_frames"),
+	])
+	print("dodge=%d,%d,%d,%d" % [
+		definition.get_int("dodge_total_frames"),
+		definition.get_int("dodge_invuln_start"),
+		definition.get_int("dodge_invuln_end"),
+		definition.get_int("dodge_cooldown_frames"),
+	])
+
+
+func _attack_definition_summary(
+	move_definition: RollbackFighterMoveDefinition
+) -> String:
+	return "%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
+		move_definition.get_int("startup"),
+		move_definition.get_int("active"),
+		move_definition.get_int("recovery"),
+		move_definition.get_int("damage"),
+		move_definition.get_int("hitstun"),
+		move_definition.get_int("knockback_x"),
+		move_definition.get_int("hitstop"),
+		move_definition.get_int("contact_cooldown"),
+		move_definition.get_int("guard_damage"),
+	]
 
 
 func _physics_process(delta: float) -> void:
@@ -1248,6 +1597,9 @@ func _draw_runtime_combat_boxes() -> void:
 func _update_play_hud() -> void:
 	if play_status_label == null:
 		return
+	if USE_ENET and _match_config_handshake.failed:
+		play_status_label.text = "CONFIG MISMATCH"
+		return
 
 	if combat_system != null and combat_system.match_over:
 		play_status_label.text = "PLAYER %d WINS" % combat_system.winner_id
@@ -1268,16 +1620,21 @@ func _update_play_hud() -> void:
 	if ENET_HOST:
 		var remote_peer_id: int = int(transport.get("remote_peer_id"))
 		if remote_peer_id > 0:
-			play_status_label.text = "CONNECTED — PRESS SPACE TO START"
+			play_status_label.text = (
+				"CONNECTED — PRESS SPACE TO START"
+				if _match_config_handshake.can_start_network_match()
+				else "CONNECTED — VERIFYING CONFIG"
+			)
 		else:
 			play_status_label.text = "WAITING FOR OPPONENT..."
 	else:
 		var connected: bool = bool(transport.get("is_connected"))
-		play_status_label.text = (
-			"CONNECTED — WAITING FOR HOST"
-			if connected
-			else "CONNECTING TO HOST..."
-		)
+		if not connected:
+			play_status_label.text = "CONNECTING TO HOST..."
+		elif not _match_config_handshake.can_start_network_match():
+			play_status_label.text = "CONNECTED — VERIFYING CONFIG"
+		else:
+			play_status_label.text = "CONNECTED — WAITING FOR HOST"
 
 
 func _update_camera(delta: float) -> void:
@@ -1597,8 +1954,13 @@ func _ensure_opponent_placeholder() -> void:
 		add_child(p2_placeholder)
 
 
-func _bind_sprite_to_state(placeholder: Node, state: Node, label: String) -> Node:
-	if placeholder == null or state == null:
+func _bind_sprite_to_state(
+	placeholder: Node,
+	state: Node,
+	definition: RollbackFighterCharacterDefinition,
+	label: String
+) -> Node:
+	if placeholder == null or state == null or definition == null:
 		return null
 
 	var sprite: Node = placeholder.find_child("PlayerSpriteDebug", true, false)
@@ -1623,7 +1985,12 @@ func _bind_sprite_to_state(placeholder: Node, state: Node, label: String) -> Nod
 	if sprite.get("debug_label") != null:
 		sprite.set("debug_label", label)
 
-	sprite.call("bind_state", state)
+	sprite.call(
+		"bind_state",
+		state,
+		definition.get_presentation(),
+		definition.get_int("dodge_total_frames")
+	)
 	return sprite
 
 
@@ -1633,6 +2000,12 @@ func _on_start_match_received() -> void:
 
 	if bool(rollback_session.match_started):
 		print("[Arena] Duplicate start_match ignored.")
+		return
+	if not _match_config_handshake.may_start_match(USE_ENET):
+		if _match_config_handshake.failed:
+			return
+		_pending_start_match_received = true
+		print("[Arena] START received before config verification; waiting.")
 		return
 
 	print("[Arena] start_match received. Starting rollback session.")
@@ -1658,11 +2031,21 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 
 	if event.is_action_pressed("ui_accept"):
+		if not USE_ENET:
+			if rollback_session != null and not bool(rollback_session.match_started):
+				_on_start_match_received()
+			get_viewport().set_input_as_handled()
+			return
 		if transport != null and transport.has_method("send_start_match"):
 			if not bool(transport.get("is_host")):
 				return
 
 			if rollback_session != null and bool(rollback_session.match_started):
+				return
+			if not _match_config_handshake.can_start_network_match():
+				if _match_config_handshake.failed:
+					return
+				print("[Arena] Waiting for config compatibility before START.")
 				return
 
 			print("[Arena] Host requesting start_match.")

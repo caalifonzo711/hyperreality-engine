@@ -1,4 +1,5 @@
 {
+  "config_version": 1,
   "move_id": "jab",
   "boxes": [
 	{ "frame": 1, "type": "hit", "x": 30, "y": -40, "w": 40, "h": 20 }

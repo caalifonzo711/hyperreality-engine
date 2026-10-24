@@ -1,0 +1,23 @@
+{
+  "config_version": 1,
+  "simulation_hz": 60,
+  "light_input_buffer_frames": 3,
+  "heavy_input_buffer_frames": 3,
+  "combo_hitstun_percent": [100, 85, 70, 55],
+  "combo_knockback_percent": [100, 115, 135, 160],
+  "blocked_chip_percent": 20,
+  "blocked_hit_stun_frames": 6,
+  "dodge_contact_hitstop": 1,
+  "spawn_positions": {
+    "p1": { "x": 200, "y": 250 },
+    "p2": { "x": 600, "y": 250 }
+  },
+  "fallback_policy": "reject",
+  "world_contact_bounds": {
+    "enabled": true,
+    "left": 0,
+    "right": 800,
+    "top": 0,
+    "bottom": 400
+  }
+}

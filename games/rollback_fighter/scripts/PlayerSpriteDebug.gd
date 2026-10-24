@@ -1,107 +1,32 @@
 extends Sprite2D
 class_name PlayerSpriteDebug
 
-# Keep the ones that already work
-@export var idle_frames: Array[String] = [
-	"res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png",
-	"res://games/rollback_fighter/characters/example_fighter/sprites/idle_1.png",
-]
-
-@export var jab_frames: Array[String] = [
-	"res://games/rollback_fighter/characters/example_fighter/sprites/jab_0.png",
-	"res://games/rollback_fighter/characters/example_fighter/sprites/jab_1.png",
-]
-
-# New ones: prefilled defaults, but you can still override in Inspector
-@export var heavy_frames: Array[String] = [
-	"res://games/rollback_fighter/characters/example_fighter/sprites/jab_0.png",
-	"res://games/rollback_fighter/characters/example_fighter/sprites/jab_1.png",
-]
-
-@export var block_frames: Array[String] = [
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_block_0.png",
-]
-
-@export var dodge_frames: Array[String] = [
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_spot_dodge1.png",
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_spot_dodge2.png",
-]
-
-@export var hit_frames: Array[String] = [
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_hit_0.png",
-]
-
-@export var dead_frames: Array[String] = [
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_dead_0.png",
-]
-
-@export var idle_fps: float = 8.0
-@export var jab_fps: float = 12.0
-@export var heavy_fps: float = 10.0
-@export var block_fps: float = 8.0
-@export var dodge_fps: float = 12.0
-
 @export var debug_label: String = "P?"
 
-# Presentation-only metadata. Each feet anchor is expressed in source-image
-# pixels. The scale normalizes the visible fighter body to roughly the same
-# 48-pixel gameplay height without modifying the source PNGs.
-const FRAME_PRESENTATION := {
-	"res://games/rollback_fighter/characters/example_fighter/sprites/idle_0.png": {
-		"feet": Vector2(288.0, 416.0),
-		"scale": 0.135,
-	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/idle_1.png": {
-		"feet": Vector2(288.0, 416.0),
-		"scale": 0.135,
-	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/jab_0.png": {
-		"feet": Vector2(646.0, 589.0),
-		"scale": 0.108,
-	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/jab_1.png": {
-		"feet": Vector2(647.0, 589.0),
-		"scale": 0.108,
-	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_block_0.png": {
-		"feet": Vector2(279.0, 416.0),
-		"scale": 0.135,
-	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_spot_dodge1.png": {
-		"feet": Vector2(335.0, 413.0),
-		"scale": 0.135,
-	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_spot_dodge2.png": {
-		"feet": Vector2(280.0, 416.0),
-		"scale": 0.135,
-	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_hit_0.png": {
-		"feet": Vector2(284.0, 402.0),
-		"scale": 0.138,
-	},
-	"res://games/rollback_fighter/characters/example_fighter/sprites/hero_dead_0.png": {
-		"feet": Vector2(252.0, 471.0),
-		"scale": 0.118,
-	},
-}
-
 var _ps: Node = null
-
-# Modes: idle / jab / heavy / block / dodge / hit / dead
-var _mode: String = "idle"
+var _presentation: RollbackFighterPresentationDefinition = null
+var _dodge_total_frames: int = 0
+var _animation_id: String = ""
+var _animation_data: Dictionary = {}
 var _t: float = 0.0
 var _frame: int = 0
 var _warned_missing: Dictionary = {}
+var _texture_cache: Dictionary = {}
 
 
-func _ready() -> void:
-	_apply_frame()
-
-
-func bind_state(state: Node) -> void:
+func bind_state(
+	state: Node,
+	presentation: RollbackFighterPresentationDefinition,
+	dodge_total_frames: int
+) -> void:
 	_ps = state
-	_set_mode("idle")
-	print("[PlayerSpriteDebug %s] bound to state id=%s" % [debug_label, str(_ps.get_instance_id())])
+	_presentation = presentation
+	_dodge_total_frames = dodge_total_frames
+	_set_animation(_presentation.get_state_animation_id("idle"))
+	print("[PlayerSpriteDebug %s] bound to state id=%s" % [
+		debug_label,
+		str(_ps.get_instance_id()),
+	])
 
 
 func get_debug_visual_state() -> Dictionary:
@@ -110,7 +35,7 @@ func get_debug_visual_state() -> Dictionary:
 		texture_size = texture.get_size()
 
 	return {
-		"mode": _mode,
+		"mode": _animation_id,
 		"frame": _frame,
 		"texture_size": texture_size,
 		"offset": offset,
@@ -119,211 +44,207 @@ func get_debug_visual_state() -> Dictionary:
 
 
 func _process(delta: float) -> void:
-	if _ps == null:
+	if _ps == null or _presentation == null:
 		return
 
-	var wanted_mode: String = _choose_mode()
+	var wanted_animation: String = _choose_animation()
+	if wanted_animation != _animation_id:
+		_set_animation(wanted_animation)
 
-	if wanted_mode != _mode:
-		_set_mode(wanted_mode)
-
-	if _mode == "idle":
-		_advance_idle_animation(delta)
+	var state_val: Variant = _ps.get("state")
+	if (
+		typeof(state_val) == TYPE_INT
+		and int(state_val) == PlayerState.MoveState.IDLE
+		and str(_animation_data.get("playback", "")) == "loop_fps"
+	):
+		_advance_loop_animation(delta)
 	else:
-		_frame = _get_authoritative_visual_frame()
+		_frame = _get_state_driven_frame()
 
-	# The source artwork faces left, so positive gameplay facing must flip it.
 	var facing_val: Variant = _ps.get("facing")
 	if typeof(facing_val) == TYPE_INT:
-		flip_h = int(facing_val) > 0
+		var faces_right: bool = int(facing_val) > 0
+		flip_h = (
+			faces_right
+			if _presentation.get_source_art_faces() == "left"
+			else not faces_right
+		)
 
 	_apply_frame()
 
 
-func _advance_idle_animation(delta: float) -> void:
-	_t += delta
-
-	var frames: Array[String] = _get_frames_for_mode("idle")
+func _advance_loop_animation(delta: float) -> void:
+	var frames: Array = _animation_data.get("frames", [])
 	if frames.is_empty():
 		_frame = 0
 		return
 
-	var frame_time: float = 1.0 / maxf(idle_fps, 0.001)
+	_t += delta
+	var fps: float = float(int(_animation_data.get("fps_milli", 1))) / 1000.0
+	var frame_time: float = 1.0 / maxf(fps, 0.001)
 	while _t >= frame_time:
 		_t -= frame_time
 		_frame = (_frame + 1) % frames.size()
 
 
-func _get_authoritative_visual_frame() -> int:
-	if _ps == null:
+func _get_state_driven_frame() -> int:
+	var frames: Array = _animation_data.get("frames", [])
+	if frames.is_empty() or _ps == null:
 		return 0
 
-	if _mode == "dodge":
-		var frames_left_val: Variant = _ps.get("frames_left")
-		if typeof(frames_left_val) != TYPE_INT:
-			return 0
-
-		var elapsed: int = PlayerState.DODGE_TOTAL - int(frames_left_val)
-		if elapsed * 2 >= PlayerState.DODGE_TOTAL:
-			return mini(1, maxi(dodge_frames.size() - 1, 0))
-		return 0
-
-	if _mode != "jab" and _mode != "heavy":
-		return 0
-
-	var state_val: Variant = _ps.get("state")
-	if typeof(state_val) != TYPE_INT:
-		return 0
-
-	# Startup and recovery use pose 0. The extended pose is shown only while
-	# the deterministic simulation says the attack is active.
-	if int(state_val) == PlayerState.MoveState.ACTIVE:
-		var frames: Array[String] = _get_frames_for_mode(_mode)
-		return mini(1, maxi(frames.size() - 1, 0))
-
+	var playback: String = str(_animation_data.get("playback", ""))
+	if playback == "state_stretched":
+		return _get_stretched_state_frame(frames.size())
+	if playback == "attack_phase_map":
+		return _get_attack_phase_frame(frames.size())
 	return 0
 
 
-func _choose_mode() -> String:
-	if _ps == null:
-		return "idle"
+func _get_stretched_state_frame(frame_count: int) -> int:
+	var frames_left_val: Variant = _ps.get("frames_left")
+	if typeof(frames_left_val) != TYPE_INT or _dodge_total_frames <= 0:
+		return 0
+	var elapsed: int = maxi(_dodge_total_frames - int(frames_left_val), 0)
+	var stretched_index: int = int(
+		(elapsed * frame_count) / _dodge_total_frames
+	)
+	return clampi(stretched_index, 0, frame_count - 1)
 
+
+func _get_attack_phase_frame(frame_count: int) -> int:
 	var state_val: Variant = _ps.get("state")
-	var atk_kind_val: Variant = _ps.get("attack_kind")
+	var attack_kind_val: Variant = _ps.get("attack_kind")
+	var frames_left_val: Variant = _ps.get("frames_left")
+	if (
+		typeof(state_val) != TYPE_INT
+		or typeof(attack_kind_val) != TYPE_INT
+		or typeof(frames_left_val) != TYPE_INT
+	):
+		return 0
 
+	var phase: String = _attack_phase_for_state(int(state_val))
+	if phase.is_empty():
+		return 0
+	var phase_frames: Array[int] = _presentation.get_attack_phase_frames(
+		_animation_id,
+		phase
+	)
+	if phase_frames.is_empty():
+		return 0
+
+	var move_variant: Variant = _ps.call("get_attack_move", int(attack_kind_val))
+	if not move_variant is RollbackFighterMoveDefinition:
+		return clampi(phase_frames[0], 0, frame_count - 1)
+	var move: RollbackFighterMoveDefinition = move_variant
+	var phase_duration: int = maxi(move.get_int(phase), 1)
+	var elapsed: int = maxi(phase_duration - int(frames_left_val), 0)
+	var mapped_index: int = int(
+		(elapsed * phase_frames.size()) / phase_duration
+	)
+	mapped_index = clampi(mapped_index, 0, phase_frames.size() - 1)
+	return clampi(phase_frames[mapped_index], 0, frame_count - 1)
+
+
+func _attack_phase_for_state(state: int) -> String:
+	match state:
+		PlayerState.MoveState.STARTUP:
+			return "startup"
+		PlayerState.MoveState.ACTIVE:
+			return "active"
+		PlayerState.MoveState.RECOVERY:
+			return "recovery"
+		_:
+			return ""
+
+
+func _choose_animation() -> String:
+	var state_val: Variant = _ps.get("state")
 	if typeof(state_val) != TYPE_INT:
-		return "idle"
+		return _presentation.get_state_animation_id("idle")
 
-	var state_i: int = int(state_val)
-
-	match state_i:
+	match int(state_val):
 		PlayerState.MoveState.DEAD:
-			return "dead"
-
+			return _presentation.get_state_animation_id("dead")
 		PlayerState.MoveState.HURT:
-			return "hit"
-
+			return _presentation.get_state_animation_id("hurt")
 		PlayerState.MoveState.BLOCK:
-			return "block"
-
+			return _presentation.get_state_animation_id("block")
 		PlayerState.MoveState.DODGE:
-			return "dodge"
-
+			return _presentation.get_state_animation_id("dodge")
 		PlayerState.MoveState.STARTUP, PlayerState.MoveState.ACTIVE, PlayerState.MoveState.RECOVERY:
-			if typeof(atk_kind_val) == TYPE_INT:
-				var atk_kind_i: int = int(atk_kind_val)
-				match atk_kind_i:
-					PlayerState.AttackKind.LIGHT:
-						return "jab"
-					PlayerState.AttackKind.HEAVY:
-						if heavy_frames.is_empty():
-							return "jab"
-						return "heavy"
-			return "idle"
-
-		PlayerState.MoveState.IDLE:
-			return "idle"
-
+			var attack_kind_val: Variant = _ps.get("attack_kind")
+			if typeof(attack_kind_val) == TYPE_INT:
+				var move_variant: Variant = _ps.call(
+					"get_attack_move",
+					int(attack_kind_val)
+				)
+				if move_variant is RollbackFighterMoveDefinition:
+					var move: RollbackFighterMoveDefinition = move_variant
+					return move.get_animation_id()
+			return ""
 		_:
-			return "idle"
+			return _presentation.get_state_animation_id("idle")
 
 
-func _get_frames_for_mode(mode: String) -> Array[String]:
-	match mode:
-		"idle":
-			return idle_frames
-		"jab":
-			return jab_frames
-		"heavy":
-			return heavy_frames
-		"block":
-			return block_frames
-		"dodge":
-			return dodge_frames
-		"hit":
-			return hit_frames
-		"dead":
-			return dead_frames
-		_:
-			return idle_frames
-
-
-func _get_fps_for_mode(mode: String) -> float:
-	match mode:
-		"idle":
-			return idle_fps
-		"jab":
-			return jab_fps
-		"heavy":
-			return heavy_fps
-		"block":
-			return block_fps
-		"dodge":
-			return dodge_fps
-		"hit":
-			return 12.0
-		"dead":
-			return 1.0
-		_:
-			return idle_fps
-
-
-func _set_mode(m: String) -> void:
-	_mode = m
+func _set_animation(animation_id: String) -> void:
+	_animation_id = animation_id
+	_animation_data = (
+		_presentation.get_animation(animation_id)
+		if _presentation != null
+		else {}
+	)
 	_t = 0.0
 	_frame = 0
-	print("[PlayerSpriteDebug %s] mode -> %s" % [debug_label, _mode])
+	print("[PlayerSpriteDebug %s] mode -> %s" % [debug_label, _animation_id])
 	_apply_frame()
 
 
 func _apply_frame() -> void:
-	var frames: Array[String] = _get_frames_for_mode(_mode)
-
-	# Fallbacks so missing arrays don't break visuals
+	var frames: Array = _animation_data.get("frames", [])
 	if frames.is_empty():
-		if _mode == "heavy":
-			frames = jab_frames
-		elif _mode == "hit":
-			frames = hit_frames if not hit_frames.is_empty() else idle_frames
-		elif _mode == "dead":
-			frames = dead_frames if not dead_frames.is_empty() else idle_frames
-		else:
-			frames = idle_frames
-
-	if frames.is_empty():
+		texture = null
+		_warn_once("animation:%s" % _animation_id, "missing animation frames")
 		return
 
 	var idx: int = clampi(_frame, 0, frames.size() - 1)
-	var path: String = frames[idx]
-
-	if ResourceLoader.exists(path):
-		var tex: Texture2D = load(path)
+	var frame_data: Dictionary = frames[idx]
+	var path: String = str(frame_data.get("sprite", ""))
+	var tex: Texture2D = _texture_cache.get(path) as Texture2D
+	if tex == null and ResourceLoader.exists(path):
+		tex = ResourceLoader.load(path) as Texture2D
 		if tex != null:
-			texture = tex
-			_apply_presentation(path, tex)
-	else:
-		if not _warned_missing.has(path):
-			_warned_missing[path] = true
-			push_warning("[PlayerSpriteDebug %s] missing texture: %s" % [debug_label, path])
+			_texture_cache[path] = tex
+	if tex == null:
+		texture = null
+		_warn_once(path, "missing texture: %s" % path)
+		return
+
+	texture = tex
+	_apply_presentation(frame_data, tex)
 
 
-func _apply_presentation(path: String, tex: Texture2D) -> void:
+func _apply_presentation(frame_data: Dictionary, tex: Texture2D) -> void:
 	centered = true
-
 	var texture_size: Vector2 = tex.get_size()
-	var presentation: Dictionary = FRAME_PRESENTATION.get(path, {})
-	var feet: Vector2 = presentation.get(
-		"feet",
-		texture_size * 0.5
+	var feet_data: Dictionary = frame_data["feet_anchor"]
+	var feet := Vector2(
+		float(int(feet_data["x"])),
+		float(int(feet_data["y"]))
 	)
-	var visual_scale: float = float(presentation.get("scale", 1.0))
+	var visual_scale: float = float(int(frame_data["scale_milli"])) / 1000.0
 
 	# With a centered Sprite2D, source pixel P is drawn at P - size/2.
-	# Offset the authored feet pixel to the parent origin. Sprite2D flips the
-	# texture inside its draw rectangle, so the horizontal offset must mirror
-	# with the artwork to keep the same feet point anchored in both facings.
+	# Mirror the horizontal offset with the artwork so the authored feet point
+	# remains anchored to the authoritative fighter origin in both facings.
 	var anchor_offset: Vector2 = texture_size * 0.5 - feet
 	if flip_h:
 		anchor_offset.x = -anchor_offset.x
 	offset = anchor_offset
 	scale = Vector2.ONE * visual_scale
+
+
+func _warn_once(key: String, message: String) -> void:
+	if _warned_missing.has(key):
+		return
+	_warned_missing[key] = true
+	push_warning("[PlayerSpriteDebug %s] %s" % [debug_label, message])
