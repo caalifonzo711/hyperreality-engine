@@ -1,0 +1,16 @@
+{
+  "config_version": 1,
+  "id": "heavy",
+  "display_name": "Heavy",
+  "startup": 8,
+  "active": 2,
+  "recovery": 16,
+  "damage": 18,
+  "hitstun": 14,
+  "knockback_x": 650,
+  "hitstop": 8,
+  "contact_cooldown": 14,
+  "guard_damage": 105,
+  "hitbox_profile": "hitboxes/heavy.json",
+  "animation_id": "heavy"
+}

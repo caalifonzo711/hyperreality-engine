@@ -19,15 +19,24 @@ const AdapterScript = preload(
 const MatchConfigHandshakeScript = preload(
 	"res://games/rollback_fighter/scripts/config/MatchConfigHandshake.gd"
 )
+const TuningDraftScript = preload(
+	"res://games/rollback_fighter/scripts/config/FighterTuningDraft.gd"
+)
 
 const RULES_PATH := "res://games/rollback_fighter/config/game_rules.json"
 const REGISTRY_PATH := "res://games/rollback_fighter/config/builtin_fighters.json"
 const CHARACTER_PATH := "res://games/rollback_fighter/characters/example_fighter/character.json"
+const ALT_CHARACTER_PATH := "res://games/rollback_fighter/characters/example_fighter_alt/character.json"
 const PRESENTATION_PATH := "res://games/rollback_fighter/characters/example_fighter/presentation.json"
 const CHARACTER_ROOT := "res://games/rollback_fighter/characters/example_fighter"
 const EXPECTED_CANONICAL_BYTE_LENGTH := 735
 const EXPECTED_AUTH_DIGEST := \
 	"2cc92852ed7d9e0a7217209b2e31c129205e74bbe5efe5571619207afb55e23b"
+const EXPECTED_MIXED_MATCH_BYTE_LENGTH := 1278
+const EXPECTED_MIXED_MATCH_DIGEST := \
+	"a4ebda2cb3f4aca70a0c259cb5e7abe743659cd6b4b934012427d66e77fd99d3"
+const EXPECTED_REVERSED_MATCH_DIGEST := \
+	"55bc43dd14975c2c99f85c9aea83b66a5f7e451580d53eb1ddbb7a9104727c05"
 
 
 func _initialize() -> void:
@@ -36,9 +45,14 @@ func _initialize() -> void:
 	var rules_result: Dictionary = loader.load_game_rules(RULES_PATH)
 	var first_result: Dictionary = loader.load_builtin_fighter(REGISTRY_PATH, "example_fighter")
 	var second_result: Dictionary = loader.load_builtin_fighter(REGISTRY_PATH, "example_fighter")
+	var alt_result: Dictionary = loader.load_builtin_fighter(
+		REGISTRY_PATH,
+		"example_fighter_alt"
+	)
 	_expect(bool(rules_result.get("ok", false)), "valid game rules load", failures)
 	_expect(bool(first_result.get("ok", false)), "valid example fighter loads", failures)
 	_expect(bool(second_result.get("ok", false)), "repeated example fighter load succeeds", failures)
+	_expect(bool(alt_result.get("ok", false)), "valid alternate fighter loads from registry", failures)
 
 	if failures.is_empty():
 		var writer = WriterScript.new()
@@ -50,6 +64,32 @@ func _initialize() -> void:
 		_expect(first_digest == second_digest, "repeated loads produce identical SHA-256", failures)
 		_expect(first_bytes.size() == EXPECTED_CANONICAL_BYTE_LENGTH, "canonical byte length remains unchanged", failures)
 		_expect(first_digest == EXPECTED_AUTH_DIGEST, "authoritative config digest remains unchanged", failures)
+		var normalized_dump: String = writer.normalized_dump(
+			rules_result["definition"],
+			first_result["definition"]
+		)
+		for expected_line in [
+			"rules.simulation_hz=60",
+			"rules.input_buffers=3,3",
+			"rules.combo_hitstun=100,85,70,55",
+			"rules.combo_knockback=100,115,135,160",
+			"rules.block=20,6 dodge_hitstop=1",
+			"fighter.id=example_fighter",
+			"fighter.max_hp=100",
+			"fighter.movement=320,14400,19200,28800,900,1100",
+			"fighter.hurtbox=-10,-48,20,48",
+			"fighter.guard=300,1,1,150,24",
+			"fighter.dodge=16,2,6,24",
+			"move.light.values=2,2,4,7,9,220,3,6,30",
+			"move.light.hitboxes=1:30,-40,40,20",
+			"move.heavy.values=6,2,14,14,12,600,7,12,90",
+			"move.heavy.hitboxes=legacy_horizontal_range(56,8)",
+		]:
+			_expect(
+				normalized_dump.contains(expected_line),
+				"normalized authoritative dump includes %s" % expected_line,
+				failures
+			)
 		_test_definition_driven_attacks(
 			first_result["definition"],
 			rules_result["definition"],
@@ -79,6 +119,20 @@ func _initialize() -> void:
 			first_result["definition"],
 			failures
 		)
+		_test_tuning_draft(
+			loader,
+			writer,
+			first_result["definition"],
+			failures
+		)
+		if bool(alt_result.get("ok", false)):
+			_test_mixed_fighter_definitions(
+				writer,
+				rules_result["definition"],
+				first_result["definition"],
+				alt_result["definition"],
+				failures
+			)
 
 	_test_fractional_number(loader, failures)
 	_test_invalid_path(loader, failures)
@@ -103,9 +157,26 @@ func _test_fractional_number(loader, failures: PackedStringArray) -> void:
 
 
 func _test_invalid_path(loader, failures: PackedStringArray) -> void:
-	var errors: Array[Dictionary] = []
-	loader._resolve_reference("res://fighter", "../escape.json", "<test>", "path", errors)
-	_expect(_has_code(errors, "CFG_RESOURCE_REFERENCE_INVALID"), "invalid root-relative path rejected", failures)
+	for invalid_reference in [
+		"../escape.json",
+		"folder\\sprite.png",
+		"C:/fighter/sprite.png",
+		"/absolute/sprite.png",
+		"file://external/sprite.png",
+	]:
+		var errors: Array[Dictionary] = []
+		loader._resolve_reference(
+			"res://fighter",
+			str(invalid_reference),
+			"<test>",
+			"path",
+			errors
+		)
+		_expect(
+			_has_code(errors, "CFG_RESOURCE_REFERENCE_INVALID"),
+			"Android-unsafe resource path rejected: %s" % str(invalid_reference),
+			failures
+		)
 
 
 func _test_invalid_dodge_window(loader, failures: PackedStringArray) -> void:
@@ -358,6 +429,11 @@ func _test_match_config_handshake(
 		failures
 	)
 	_expect(
+		not local_identity.has("platform"),
+		"platform label is excluded from authoritative match identity",
+		failures
+	)
+	_expect(
 		not handshake.may_start_match(true),
 		"network match cannot start before config verification",
 		failures
@@ -520,6 +596,334 @@ func _test_match_config_handshake(
 			_identity_for(writer, rules, presentation_only_character, base)
 		),
 		"presentation-only change leaves match digest unchanged",
+		failures
+	)
+
+
+func _test_mixed_fighter_definitions(
+	writer: RollbackFighterCanonicalConfigWriter,
+	rules: RollbackFighterGameRulesDefinition,
+	p1_definition: RollbackFighterCharacterDefinition,
+	p2_definition: RollbackFighterCharacterDefinition,
+	failures: PackedStringArray
+) -> void:
+	_expect(
+		p1_definition.get_id() == "example_fighter"
+		and p2_definition.get_id() == "example_fighter_alt",
+		"registry loads distinct fighter identities",
+		failures
+	)
+	_expect(
+		p1_definition.get_int("max_hp") == 100
+		and p2_definition.get_int("max_hp") == 120,
+		"fighter HP values remain independent",
+		failures
+	)
+	_expect(
+		p1_definition.get_int("move_speed") == 320
+		and p2_definition.get_int("move_speed") == 280,
+		"fighter movement values remain independent",
+		failures
+	)
+	_expect(
+		p1_definition.get_int("guard_max_units") == 300
+		and p2_definition.get_int("guard_max_units") == 360,
+		"fighter guard values remain independent",
+		failures
+	)
+	_expect(
+		[
+			p1_definition.get_int("dodge_total_frames"),
+			p1_definition.get_int("dodge_invuln_start"),
+			p1_definition.get_int("dodge_invuln_end"),
+			p1_definition.get_int("dodge_cooldown_frames"),
+		] == [16, 2, 6, 24]
+		and [
+			p2_definition.get_int("dodge_total_frames"),
+			p2_definition.get_int("dodge_invuln_start"),
+			p2_definition.get_int("dodge_invuln_end"),
+			p2_definition.get_int("dodge_cooldown_frames"),
+		] == [18, 3, 7, 30],
+		"fighter dodge values remain independent",
+		failures
+	)
+	_expect(
+		p1_definition.get_move_for_slot("light").get_int("damage") == 7
+		and p2_definition.get_move_for_slot("light").get_int("damage") == 9
+		and p1_definition.get_move_for_slot("heavy").get_int("damage") == 14
+		and p2_definition.get_move_for_slot("heavy").get_int("damage") == 18,
+		"fighter jab and heavy move values remain independent",
+		failures
+	)
+	_expect(
+		p1_definition.get_presentation() != p2_definition.get_presentation(),
+		"each fighter loads and owns a distinct PresentationDefinition",
+		failures
+	)
+
+	var p1_state: PlayerState = PlayerStateScript.new()
+	var p2_state: PlayerState = PlayerStateScript.new()
+	var combat: CombatSystem = CombatSystemScript.new()
+	p1_state.configure_character_definition(p1_definition)
+	p2_state.configure_character_definition(p2_definition)
+	combat.p1_state = p1_state
+	combat.p2_state = p2_state
+	combat.configure_character_definitions(p1_definition, p2_definition, rules)
+	_expect(
+		p1_state.hp == 100 and p2_state.hp == 120
+		and p1_state.move_speed == 320.0 and p2_state.move_speed == 280.0,
+		"P1/P2 PlayerState receive their selected CharacterDefinition",
+		failures
+	)
+	_expect(
+		combat._get_character_definition(p1_state) == p1_definition
+		and combat._get_character_definition(p2_state) == p2_definition,
+		"CombatSystem maps each defender to its own fighter definition",
+		failures
+	)
+	p1_state.attack_kind = PlayerState.AttackKind.LIGHT
+	p2_state.attack_kind = PlayerState.AttackKind.LIGHT
+	_expect(
+		combat._get_move_definition(p1_state).get_int("damage") == 7
+		and combat._get_move_definition(p2_state).get_int("damage") == 9,
+		"P1 and P2 attacks resolve their own MoveDefinition",
+		failures
+	)
+	p1_state.attack_kind = PlayerState.AttackKind.HEAVY
+	p2_state.attack_kind = PlayerState.AttackKind.HEAVY
+	_expect(
+		combat._get_move_definition(p1_state).get_int("damage") == 14
+		and combat._get_move_definition(p2_state).get_int("damage") == 18,
+		"P1 and P2 heavy attacks resolve their own MoveDefinition",
+		failures
+	)
+	_expect(
+		int(combat.capture_state()["guard_units_1"]) == 300
+		and int(combat.capture_state()["guard_units_2"]) == 360,
+		"P1/P2 guard runtime values initialize from their own definitions",
+		failures
+	)
+
+	var mixed_identity: Dictionary = _identity_for(
+		writer, rules, p1_definition, p2_definition
+	)
+	var repeated_mixed_identity: Dictionary = _identity_for(
+		writer, rules, p1_definition, p2_definition
+	)
+	var reversed_identity: Dictionary = _identity_for(
+		writer, rules, p2_definition, p1_definition
+	)
+	_expect(
+		int(mixed_identity["canonical_byte_length"])
+		== EXPECTED_MIXED_MATCH_BYTE_LENGTH
+		and str(mixed_identity["digest"]) == EXPECTED_MIXED_MATCH_DIGEST
+		and str(mixed_identity["digest"]) == str(repeated_mixed_identity["digest"])
+		and int(mixed_identity["canonical_byte_length"])
+		== int(repeated_mixed_identity["canonical_byte_length"]),
+		"mixed-fighter identity matches its golden length/digest and repeated builds",
+		failures
+	)
+	_expect(
+		str(reversed_identity["digest"]) == EXPECTED_REVERSED_MATCH_DIGEST
+		and str(mixed_identity["digest"]) != str(reversed_identity["digest"]),
+		"reversed slot order matches its golden digest and differs from forward order",
+		failures
+	)
+	var handshake: RollbackFighterMatchConfigHandshake = (
+		MatchConfigHandshakeScript.new()
+	)
+	handshake.local_identity = mixed_identity.duplicate(true)
+	var same_assignment_result: Dictionary = handshake.accept_remote_identity(
+		repeated_mixed_identity
+	)
+	_expect(
+		bool(same_assignment_result.get("ok", false)),
+		"same mixed-fighter assignment passes config handshake",
+		failures
+	)
+	var reversed_result: Dictionary = handshake.accept_remote_identity(
+		reversed_identity
+	)
+	_expect(
+		not bool(reversed_result.get("ok", false))
+		and str(reversed_result.get("message", "")).contains("Fighter ID mismatch"),
+		"handshake rejects a different fighter assignment clearly",
+		failures
+	)
+
+	var changed_presentation: Dictionary = p2_definition.get_presentation().get_data()
+	var animations: Dictionary = changed_presentation["animations"]
+	var idle: Dictionary = animations["idle"]
+	var frames: Array = idle["frames"]
+	var first_frame: Dictionary = frames[0]
+	first_frame["scale_milli"] = int(first_frame["scale_milli"]) + 1
+	var presentation_only_p2: RollbackFighterCharacterDefinition = (
+		RollbackFighterCharacterDefinition.new(
+			p2_definition.get_authoritative_data(),
+			_move_slots(p2_definition),
+			RollbackFighterPresentationDefinition.new(changed_presentation)
+		)
+	)
+	var presentation_identity: Dictionary = _identity_for(
+		writer, rules, p1_definition, presentation_only_p2
+	)
+	_expect(
+		str(presentation_identity["digest"]) == str(mixed_identity["digest"]),
+		"presentation-only difference remains outside mixed-fighter digest",
+		failures
+	)
+
+	p1_state.free()
+	p2_state.free()
+	combat.free()
+	presentation_only_p2 = null
+
+
+func _test_tuning_draft(
+	loader: RollbackFighterCharacterDefinitionLoader,
+	writer: RollbackFighterCanonicalConfigWriter,
+	active_definition: RollbackFighterCharacterDefinition,
+	failures: PackedStringArray
+) -> void:
+	var draft: RollbackFighterTuningDraft = TuningDraftScript.new()
+	draft.configure(loader, REGISTRY_PATH)
+	var registered_ids: PackedStringArray = draft.get_registered_fighter_ids()
+	_expect(
+		registered_ids.has("example_fighter")
+		and registered_ids.has("example_fighter_alt"),
+		"tuning draft choices come from the explicit built-in registry",
+		failures
+	)
+	_expect(
+		draft.load_fighter("example_fighter") and not draft.is_dirty(),
+		"tuning draft loads disk docs with a clean baseline",
+		failures
+	)
+	if draft.character_document.is_empty():
+		return
+	_expect(
+		draft.get_integer("character", "health", "max_hp") == 100
+		and draft.get_integer("jab", "", "damage") == 7,
+		"draft values populate from character and move JSON",
+		failures
+	)
+	var original_jab_text: String = FileAccess.get_file_as_string(
+		CHARACTER_ROOT + "/moves/jab.json"
+	)
+	var original_character_text: String = FileAccess.get_file_as_string(
+		CHARACTER_PATH
+	)
+	var original_presentation_text: String = FileAccess.get_file_as_string(
+		PRESENTATION_PATH
+	)
+	draft.set_integer("jab", "", "damage", 10)
+	_expect(
+		draft.is_dirty()
+		and active_definition.get_move_for_slot("light").get_int("damage") == 7,
+		"changing draft does not mutate active immutable definition",
+		failures
+	)
+	_expect(
+		draft.validate().is_empty(),
+		"valid draft uses loader schema validation successfully",
+		failures
+	)
+	var serialized_jab: Variant = JSON.parse_string(
+		draft.serialize_document("jab")
+	)
+	var serialized_jab_data: Dictionary = (
+		serialized_jab if serialized_jab is Dictionary else {}
+	)
+	_expect(
+		serialized_jab is Dictionary
+		and int(serialized_jab_data.get("damage", 0)) == 10
+		and str(serialized_jab_data.get("animation_id", "")) == "jab"
+		and str(serialized_jab_data.get("hitbox_profile", "")) == "hitboxes/jab.json",
+		"draft serialization changes edited values and preserves unrelated move fields",
+		failures
+	)
+	var serialized_validation: Array[Dictionary] = loader.validate_tuning_draft(
+		draft.fighter_root,
+		draft.character_document,
+		{
+			"light": serialized_jab_data,
+			"heavy": draft.move_documents["heavy"],
+		}
+	)
+	_expect(
+		serialized_validation.is_empty(),
+		"serialized draft round-trips through the runtime config validator",
+		failures
+	)
+	var changed_jab_data: Dictionary = (
+		active_definition.get_move_for_slot("light").get_authoritative_data()
+	)
+	changed_jab_data["damage"] = 10
+	var changed_jab: RollbackFighterMoveDefinition = (
+		RollbackFighterMoveDefinition.new(
+			changed_jab_data,
+			active_definition.get_move_for_slot("light").get_hitbox_profile()
+		)
+	)
+	var changed_definition: RollbackFighterCharacterDefinition = (
+		RollbackFighterCharacterDefinition.new(
+			active_definition.get_authoritative_data(),
+			{
+				"light": changed_jab,
+				"heavy": active_definition.get_move_for_slot("heavy"),
+			},
+			active_definition.get_presentation()
+		)
+	)
+	var identity: RollbackFighterMatchConfigHandshake = (
+		MatchConfigHandshakeScript.new()
+	)
+	var rules_result: Dictionary = loader.load_game_rules(RULES_PATH)
+	var original_identity: Dictionary = identity.build_local_identity(
+		writer,
+		rules_result["definition"],
+		active_definition,
+		active_definition
+	)
+	var changed_identity: Dictionary = identity.build_local_identity(
+		writer,
+		rules_result["definition"],
+		changed_definition,
+		active_definition
+	)
+	_expect(
+		str(original_identity["digest"]) != str(changed_identity["digest"]),
+		"authoritative draft value changes config digest after reload/apply",
+		failures
+	)
+
+	draft.set_integer("character", "dodge", "total_frames", 16)
+	draft.set_integer("character", "dodge", "invuln_end", 20)
+	var invalid_errors: Array[Dictionary] = draft.validate()
+	_expect(
+		_has_code(invalid_errors, "CFG_DODGE_WINDOW_INVALID"),
+		"invalid draft shows the shared dodge-window validation error",
+		failures
+	)
+	var refused_save: Dictionary = draft.save()
+	_expect(
+		not bool(refused_save.get("ok", false))
+		and FileAccess.get_file_as_string(CHARACTER_ROOT + "/moves/jab.json")
+		== original_jab_text
+		and FileAccess.get_file_as_string(CHARACTER_PATH) == original_character_text,
+		"invalid draft refuses save without writing source documents",
+		failures
+	)
+	_expect(
+		FileAccess.get_file_as_string(PRESENTATION_PATH) == original_presentation_text,
+		"tuning draft does not overwrite presentation data",
+		failures
+	)
+	_expect(
+		draft.revert()
+		and not draft.is_dirty()
+		and draft.get_integer("jab", "", "damage") == 7,
+		"revert reloads current on-disk values",
 		failures
 	)
 

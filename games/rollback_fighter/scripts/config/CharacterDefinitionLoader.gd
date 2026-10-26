@@ -136,6 +136,119 @@ func load_character(root: String, expected_id: String = "") -> Dictionary:
 	return {"ok": true, "definition": definition, "errors": []}
 
 
+func validate_tuning_draft(
+	root: String,
+	character_raw: Dictionary,
+	move_raws: Dictionary
+) -> Array[Dictionary]:
+	var errors: Array[Dictionary] = []
+	var normalized_root: String = _normalize_builtin_root(
+		root,
+		"<tuning-draft>",
+		errors
+	)
+	if normalized_root.is_empty():
+		return errors
+
+	var character_path: String = normalized_root + "/character.json"
+	var character_data: Dictionary = _normalize_character(
+		character_raw,
+		character_path,
+		errors
+	)
+	var move_refs: Dictionary = character_data.get("move_refs", {})
+	var move_slots: Dictionary = {}
+	var seen_move_ids: Dictionary = {}
+	for slot in MOVE_SLOTS:
+		var move_path: String = _resolve_reference(
+			normalized_root,
+			str(move_refs.get(slot, "")),
+			character_path,
+			"moves.%s" % slot,
+			errors
+		)
+		if not move_raws.has(slot):
+			_add_error(
+				errors,
+				"CFG_MOVE_REQUIRED_MISSING",
+				move_path,
+				"<move>",
+				"<missing>",
+				"draft must provide the %s move document" % slot
+			)
+			continue
+		var move_file: Dictionary = move_raws[slot]
+		var move_data: Dictionary = _normalize_move(
+			move_file,
+			move_path,
+			errors
+		)
+		var move_id: String = str(move_data.get("id", ""))
+		if seen_move_ids.has(move_id):
+			_add_error(
+				errors,
+				"CFG_MOVE_ID_DUPLICATE",
+				move_path,
+				"id",
+				move_id,
+				"move IDs referenced by slots must be unique"
+			)
+		else:
+			seen_move_ids[move_id] = true
+		var hitbox_path: String = _resolve_reference(
+			normalized_root,
+			str(move_data.get("hitbox_profile", "")),
+			move_path,
+			"hitbox_profile",
+			errors
+		)
+		if hitbox_path.is_empty():
+			continue
+		var hitbox_raw: Dictionary = _load_json(hitbox_path, errors)
+		if hitbox_raw.is_empty():
+			continue
+		var profile: Dictionary = _normalize_hitbox_profile(
+			hitbox_raw,
+			hitbox_path,
+			move_data,
+			errors
+		)
+		if not move_data.is_empty() and not profile.is_empty():
+			move_slots[slot] = MoveDefinitionScript.new(move_data, profile)
+
+	for slot in MOVE_SLOTS:
+		if not move_slots.has(slot):
+			_add_error(
+				errors,
+				"CFG_MOVE_REQUIRED_MISSING",
+				character_path,
+				"moves.%s" % slot,
+				move_refs.get(slot, "<missing>"),
+				"required move must resolve and validate"
+			)
+
+	var presentation_path: String = normalized_root + "/presentation.json"
+	var presentation_raw: Dictionary = _load_json(presentation_path, errors)
+	if not presentation_raw.is_empty():
+		var presentation_data: Dictionary = _normalize_presentation(
+			presentation_raw,
+			presentation_path,
+			normalized_root,
+			move_slots,
+			errors
+		)
+		if str(presentation_data.get("fighter_id", "")) != str(character_data.get("id", "")):
+			_add_error(
+				errors,
+				"CFG_PRESENTATION_FIGHTER_ID_MISMATCH",
+				presentation_path,
+				"fighter_id",
+				presentation_data.get("fighter_id", ""),
+				"must match character identity.id"
+			)
+	return errors
+
+
 func format_error(error: Dictionary) -> String:
 	return "[%s] file=%s field=%s value=%s rule=%s" % [
 		str(error.get("code", "CFG_UNKNOWN")),

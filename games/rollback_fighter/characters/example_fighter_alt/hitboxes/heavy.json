@@ -1,0 +1,8 @@
+{
+  "config_version": 1,
+  "move_id": "heavy",
+  "legacy_horizontal_range": {
+    "reach": 56,
+    "defender_half_extent": 8
+  }
+}

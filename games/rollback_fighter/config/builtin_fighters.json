@@ -1,6 +1,7 @@
 {
   "config_version": 1,
   "fighters": {
-    "example_fighter": "res://games/rollback_fighter/characters/example_fighter"
+    "example_fighter": "res://games/rollback_fighter/characters/example_fighter",
+    "example_fighter_alt": "res://games/rollback_fighter/characters/example_fighter_alt"
   }
 }

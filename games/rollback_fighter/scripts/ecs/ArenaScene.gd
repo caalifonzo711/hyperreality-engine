@@ -83,7 +83,8 @@ const CHARACTER_REGISTRY_PATH := \
 	"res://games/rollback_fighter/config/builtin_fighters.json"
 const GAME_RULES_CONFIG_PATH := \
 	"res://games/rollback_fighter/config/game_rules.json"
-const ACTIVE_FIGHTER_ID := "example_fighter"
+const P1_FIGHTER_ID := "example_fighter"
+const P2_FIGHTER_ID := "example_fighter_alt"
 
 
 var rollback_session: Node = null
@@ -105,6 +106,7 @@ var benchmark_complete: bool = false
 var benchmark_start_frame: int = 0
 var p1_sprite_debug: Node = null
 var p2_sprite_debug: Node = null
+var _tuning_panel: Control = null
 var _physics_ticks_since_last_render: int = 0
 var _last_render_physics_ticks: int = 0
 
@@ -191,6 +193,7 @@ var _presentation_max_prediction_lead: int = 0
 
 func _ready() -> void:
 	print("[Arena] _ready")
+	_setup_tuning_panel()
 	if not _load_authoritative_fighter_definitions():
 		push_error(
 			"[CharacterDefinition] Match setup stopped: "
@@ -331,6 +334,29 @@ func _ready() -> void:
 	_reset_presentation_measurement(false)
 
 
+func _setup_tuning_panel() -> void:
+	if OS.get_name() == "Android" or not OS.is_debug_build():
+		return
+	var tuning_panel_script: Script = load(
+		"res://games/rollback_fighter/scripts/ui/FighterTuningPanel.gd"
+	) as Script
+	if tuning_panel_script == null:
+		push_warning("[TuningUI] Could not load the desktop tuning panel script.")
+		return
+	_tuning_panel = tuning_panel_script.new()
+	_tuning_panel.name = "FighterTuningPanel"
+	_tuning_panel.reload_requested.connect(_on_tuning_reload_requested)
+	add_child(_tuning_panel)
+	_tuning_panel.call("configure", CHARACTER_REGISTRY_PATH, USE_ENET)
+
+
+func _on_tuning_reload_requested() -> void:
+	if USE_ENET:
+		return
+	get_tree().root.set_meta("tuning_ui_reload_pending", true)
+	get_tree().call_deferred("reload_current_scene")
+
+
 func _load_authoritative_fighter_definitions() -> bool:
 	var loader: RollbackFighterCharacterDefinitionLoader = (
 		CharacterDefinitionLoaderScript.new()
@@ -340,11 +366,11 @@ func _load_authoritative_fighter_definitions() -> bool:
 	)
 	var p1_result: Dictionary = loader.load_builtin_fighter(
 		CHARACTER_REGISTRY_PATH,
-		ACTIVE_FIGHTER_ID
+		P1_FIGHTER_ID
 	)
 	var p2_result: Dictionary = loader.load_builtin_fighter(
 		CHARACTER_REGISTRY_PATH,
-		ACTIVE_FIGHTER_ID
+		P2_FIGHTER_ID
 	)
 
 	var errors: Array = []
@@ -397,7 +423,14 @@ func _load_authoritative_fighter_definitions() -> bool:
 	_print_fighter_definition_summary("P1", _p1_character_definition)
 	_print_fighter_definition_summary("P2", _p2_character_definition)
 	_print_presentation_summary(_p1_character_definition)
+	_print_presentation_summary(_p2_character_definition)
 	_print_game_rules_summary(_game_rules_definition)
+	_print_match_definitions_summary(
+		_p1_character_definition,
+		_p2_character_definition,
+		canonical_byte_length,
+		digest
+	)
 	print("attacks:")
 	print("light=%s" % _attack_definition_summary(
 		_p1_character_definition.get_move_for_slot("light")
@@ -408,11 +441,25 @@ func _load_authoritative_fighter_definitions() -> bool:
 	print("config_version=%d" % _p1_character_definition.get_config_version())
 	print("canonical_byte_length=%d" % canonical_byte_length)
 	print("auth_digest=%s" % digest)
-	if OS.is_debug_build():
-		print("normalized_authoritative_config:\n%s" % writer.normalized_dump(
-			_game_rules_definition,
-			_p1_character_definition
-		))
+	print("[ConfigParity]")
+	print("platform=%s" % OS.get_name())
+	print("p1=%s" % _p1_character_definition.get_id())
+	print("p2=%s" % _p2_character_definition.get_id())
+	print("canonical_byte_length=%d" % canonical_byte_length)
+	print("auth_digest=%s" % digest)
+	print("normalized_authoritative_config_p1:\n%s" % writer.normalized_dump(
+		_game_rules_definition,
+		_p1_character_definition
+	))
+	print("normalized_authoritative_config_p2:\n%s" % writer.normalized_dump(
+		_game_rules_definition,
+		_p2_character_definition
+	))
+	var root_window: Window = get_tree().root
+	if root_window.has_meta("tuning_ui_reload_pending"):
+		root_window.remove_meta("tuning_ui_reload_pending")
+		print("[TuningUI] config reloaded")
+		print("new_digest=%s" % digest)
 	return true
 
 
@@ -589,6 +636,38 @@ func _print_fighter_definition_summary(
 	])
 
 
+func _print_match_definitions_summary(
+	p1: RollbackFighterCharacterDefinition,
+	p2: RollbackFighterCharacterDefinition,
+	canonical_byte_length: int,
+	digest: String
+) -> void:
+	print("[MatchDefinitions]")
+	_print_match_definition_player("P1", p1)
+	_print_match_definition_player("P2", p2)
+	print("canonical_byte_length=%d" % canonical_byte_length)
+	print("match_digest=%s" % digest)
+
+
+func _print_match_definition_player(
+	label: String,
+	definition: RollbackFighterCharacterDefinition
+) -> void:
+	print("%s:" % label)
+	print("id=%s" % definition.get_id())
+	print("hp=%d" % definition.get_int("max_hp"))
+	print("move_speed=%d" % definition.get_int("move_speed"))
+	print("guard=%d" % definition.get_int("guard_max_units"))
+	print("dodge=%d,%d,%d,%d" % [
+		definition.get_int("dodge_total_frames"),
+		definition.get_int("dodge_invuln_start"),
+		definition.get_int("dodge_invuln_end"),
+		definition.get_int("dodge_cooldown_frames"),
+	])
+	print("jab_damage=%d" % definition.get_move_for_slot("light").get_int("damage"))
+	print("heavy_damage=%d" % definition.get_move_for_slot("heavy").get_int("damage"))
+
+
 func _attack_definition_summary(
 	move_definition: RollbackFighterMoveDefinition
 ) -> String:
@@ -658,6 +737,9 @@ func _on_frame_pre_draw() -> void:
 
 
 func _collect_local_input() -> Dictionary:
+	if _tuning_panel != null and _tuning_panel.visible:
+		return _stress_neutral_input()
+
 	if QA_COMBAT_FUZZ_BENCHMARK_ENABLED:
 		return _collect_combat_fuzz_input()
 
@@ -2021,6 +2103,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event: InputEventKey = event
 		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_F4 and _tuning_panel != null:
+				_tuning_panel.call(
+					"set_panel_open",
+					not bool(_tuning_panel.visible)
+				)
+				get_viewport().set_input_as_handled()
+				return
 			if key_event.keycode == KEY_F2:
 				_reset_presentation_measurement()
 				get_viewport().set_input_as_handled()

@@ -1,0 +1,16 @@
+{
+  "config_version": 1,
+  "id": "jab",
+  "display_name": "Jab",
+  "startup": 3,
+  "active": 2,
+  "recovery": 5,
+  "damage": 9,
+  "hitstun": 10,
+  "knockback_x": 200,
+  "hitstop": 3,
+  "contact_cooldown": 7,
+  "guard_damage": 36,
+  "hitbox_profile": "hitboxes/jab.json",
+  "animation_id": "jab"
+}
