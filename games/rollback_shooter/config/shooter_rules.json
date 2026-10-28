@@ -1,0 +1,18 @@
+{
+	"config_version": 1,
+	"simulation_hz": 60,
+	"arena_width": 800,
+	"arena_height": 600,
+	"player_hp": 100,
+	"move_speed_px_per_second": 240,
+	"player_half_extent": 14,
+	"projectile_half_extent": 3,
+	"projectile_speed_px_per_frame": 10,
+	"projectile_damage": 20,
+	"fire_cooldown_frames": 18,
+	"projectile_lifetime_frames": 90,
+	"spawn_p1_x": 120,
+	"spawn_p1_y": 300,
+	"spawn_p2_x": 680,
+	"spawn_p2_y": 300
+}

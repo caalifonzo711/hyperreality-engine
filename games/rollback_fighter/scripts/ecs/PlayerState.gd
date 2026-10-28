@@ -316,4 +316,5 @@ func step_state_machine() -> void:
 func set_touching_wall(t: bool) -> void:
 	if is_touching_wall != t:
 		is_touching_wall = t
-		print("[WallDetector] Now touching wall." if t else "[WallDetector] Left wall.")
+		if OS.is_debug_build():
+			print("[WallDetector] Now touching wall." if t else "[WallDetector] Left wall.")

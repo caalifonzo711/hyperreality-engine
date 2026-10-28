@@ -14,6 +14,8 @@ signal disconnected()
 signal connection_failed(reason: String)
 signal start_match_received()
 signal match_config_received(identity: Dictionary)
+signal match_selection_received(p1_fighter_id: String, p2_fighter_id: String)
+signal match_selection_ack_received(p1_fighter_id: String, p2_fighter_id: String)
 
 @export var port: int = 7777
 @export var max_clients: int = 1
@@ -51,7 +53,8 @@ func host(host_port: int = 7777) -> void:
 
 	is_connected = true
 	connected.emit()
-	print("[ENetTransport] Hosting on port %d" % port)
+	if OS.is_debug_build():
+		print("[ENetTransport] Hosting on port %d" % port)
 
 
 func join(ip: String, host_port: int = 7777) -> void:
@@ -66,7 +69,8 @@ func join(ip: String, host_port: int = 7777) -> void:
 	multiplayer.multiplayer_peer = peer
 	_wire_signals()
 
-	print("[ENetTransport] Joining %s:%d" % [ip, port])
+	if OS.is_debug_build():
+		print("[ENetTransport] Joining %s:%d" % [ip, port])
 
 
 func _wire_signals() -> void:
@@ -121,6 +125,28 @@ func send_match_config(identity: Dictionary) -> void:
 		_rpc_receive_match_config.rpc_id(remote_peer_id, identity.duplicate(true))
 	else:
 		_rpc_receive_match_config.rpc_id(1, identity.duplicate(true))
+
+
+func send_match_selection(p1_fighter_id: String, p2_fighter_id: String) -> bool:
+	if not is_host or not is_connected or remote_peer_id <= 0:
+		return false
+	if not _valid_fighter_id(p1_fighter_id) or not _valid_fighter_id(p2_fighter_id):
+		return false
+	_rpc_receive_match_selection.rpc_id(
+		remote_peer_id, 1, p1_fighter_id, p2_fighter_id
+	)
+	return true
+
+
+func send_match_selection_ack(p1_fighter_id: String, p2_fighter_id: String) -> bool:
+	if is_host or not is_connected:
+		return false
+	if not _valid_fighter_id(p1_fighter_id) or not _valid_fighter_id(p2_fighter_id):
+		return false
+	_rpc_receive_match_selection_ack.rpc_id(
+		1, 1, p1_fighter_id, p2_fighter_id
+	)
+	return true
 
 
 func _should_drop_stress_input_packet(packet: Dictionary) -> bool:
@@ -202,25 +228,28 @@ func _rpc_receive_packet(packet: Dictionary) -> void:
 func _rpc_receive_match_config(identity: Dictionary) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id <= 0:
-		push_error("[ENetTransport] Ignored config handshake without a remote sender.")
+		if OS.is_debug_build():
+			push_error("[ENetTransport] Ignored config handshake without a remote sender.")
 		return
 	var expected_sender_id: int = remote_peer_id if is_host else 1
 	if sender_id != expected_sender_id:
-		push_error("[ENetTransport] Ignored config handshake from unexpected peer %d." % sender_id)
+		if OS.is_debug_build():
+			push_error("[ENetTransport] Ignored config handshake from unexpected peer %d." % sender_id)
 		return
 	if not _is_bounded_match_config(identity):
-		push_error("[ENetTransport] Ignored malformed or oversized config handshake.")
+		if OS.is_debug_build():
+			push_error("[ENetTransport] Ignored malformed or oversized config handshake.")
 		return
 	match_config_received.emit(identity.duplicate(true))
 
 
 func _is_bounded_match_config(identity: Dictionary) -> bool:
-	if identity.size() != 8:
+	if identity.size() != 9:
 		return false
 	for field in ["protocol_version", "rules_config_version", "p1_config_version", "p2_config_version", "canonical_byte_length"]:
 		if not identity.has(field) or typeof(identity[field]) != TYPE_INT:
 			return false
-	for field in ["p1_id", "p2_id"]:
+	for field in ["game_id", "p1_id", "p2_id"]:
 		if not identity.has(field) or typeof(identity[field]) != TYPE_STRING:
 			return false
 		if str(identity[field]).length() > 64:
@@ -230,6 +259,50 @@ func _is_bounded_match_config(identity: Dictionary) -> bool:
 	if str(identity["digest"]).length() > 64:
 		return false
 	return true
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_match_selection(
+	version: int,
+	p1_fighter_id: String,
+	p2_fighter_id: String
+) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if is_host or sender_id != 1 or version != 1:
+		if OS.is_debug_build():
+			push_warning("[ENetTransport] Ignored unexpected fighter selection message.")
+		return
+	if not _valid_fighter_id(p1_fighter_id) or not _valid_fighter_id(p2_fighter_id):
+		if OS.is_debug_build():
+			push_warning("[ENetTransport] Ignored malformed fighter selection message.")
+		return
+	match_selection_received.emit(p1_fighter_id, p2_fighter_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_match_selection_ack(
+	version: int,
+	p1_fighter_id: String,
+	p2_fighter_id: String
+) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if not is_host or sender_id != remote_peer_id or version != 1:
+		if OS.is_debug_build():
+			push_warning("[ENetTransport] Ignored unexpected fighter selection acknowledgement.")
+		return
+	if not _valid_fighter_id(p1_fighter_id) or not _valid_fighter_id(p2_fighter_id):
+		if OS.is_debug_build():
+			push_warning("[ENetTransport] Ignored malformed fighter selection acknowledgement.")
+		return
+	match_selection_ack_received.emit(p1_fighter_id, p2_fighter_id)
+
+
+func _valid_fighter_id(fighter_id: String) -> bool:
+	if fighter_id.is_empty() or fighter_id.length() > 64:
+		return false
+	var regex: RegEx = RegEx.new()
+	regex.compile("^[a-z0-9_]+$")
+	return regex.search(fighter_id) != null
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -293,14 +366,16 @@ func pending_delayed_count() -> int:
 
 
 func _on_peer_connected(id: int) -> void:
-	print("[ENetTransport] Peer connected: %d" % id)
+	if OS.is_debug_build():
+		print("[ENetTransport] Peer connected: %d" % id)
 	is_connected = true
 	remote_peer_id = id
 	connected.emit()
 
 
 func _on_peer_disconnected(id: int) -> void:
-	print("[ENetTransport] Peer disconnected: %d" % id)
+	if OS.is_debug_build():
+		print("[ENetTransport] Peer disconnected: %d" % id)
 	is_connected = false
 
 	if remote_peer_id == id:
@@ -311,7 +386,8 @@ func _on_peer_disconnected(id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
-	print("[ENetTransport] Connected to server")
+	if OS.is_debug_build():
+		print("[ENetTransport] Connected to server")
 	is_connected = true
 	connected.emit()
 
@@ -346,3 +422,13 @@ func send_start_match() -> void:
 @rpc("authority", "call_local", "reliable")
 func _rpc_start_match() -> void:
 	start_match_received.emit()
+
+
+func shutdown() -> void:
+	_delayed_packets.clear()
+	_start_match_sent = false
+	is_connected = false
+	remote_peer_id = 0
+	if multiplayer.multiplayer_peer == peer:
+		multiplayer.multiplayer_peer = null
+	peer.close()

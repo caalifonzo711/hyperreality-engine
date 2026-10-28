@@ -68,7 +68,7 @@ func load_builtin_fighter(registry_path: String, fighter_id: String) -> Dictiona
 
 func load_character(root: String, expected_id: String = "") -> Dictionary:
 	var errors: Array[Dictionary] = []
-	var normalized_root := _normalize_builtin_root(root, "<character-root>", errors)
+	var normalized_root := _normalize_character_root(root, "<character-root>", errors)
 	if not errors.is_empty():
 		return _failure(errors)
 
@@ -246,6 +246,60 @@ func validate_tuning_draft(
 				presentation_data.get("fighter_id", ""),
 				"must match character identity.id"
 			)
+	return errors
+
+
+func validate_creator_draft(
+	character_raw: Dictionary,
+	move_raws: Dictionary,
+	hitbox_raws: Dictionary
+) -> Array[Dictionary]:
+	# Creator drafts have no presentation file yet, so validate their complete
+	# authoritative character/move/hitbox documents with the same normalizers
+	# used by built-in definitions, without requiring a res:// character root.
+	var errors: Array[Dictionary] = []
+	var draft_file: String = "<creator-draft>"
+	var character_data: Dictionary = _normalize_character(
+		character_raw,
+		"%s/character.json" % draft_file,
+		errors
+	)
+	var move_refs: Dictionary = character_data.get("move_refs", {})
+	var seen_move_ids: Dictionary = {}
+	for slot in MOVE_SLOTS:
+		var move_name: String = "jab" if slot == "light" else "heavy"
+		var move_file: String = "%s/moves/%s.json" % [draft_file, move_name]
+		if not move_raws.has(slot):
+			_add_error(errors, "CFG_MOVE_REQUIRED_MISSING", move_file, "<move>", "<missing>", "draft must provide the %s move document" % slot)
+			continue
+		var move_raw_value: Variant = move_raws[slot]
+		if not move_raw_value is Dictionary:
+			_add_error(errors, "CFG_MOVE_INVALID", move_file, "<root>", move_raw_value, "must be an object")
+			continue
+		var move_raw: Dictionary = move_raw_value
+		var move_data: Dictionary = _normalize_move(move_raw, move_file, errors)
+		var move_id: String = str(move_data.get("id", ""))
+		if seen_move_ids.has(move_id):
+			_add_error(errors, "CFG_MOVE_ID_DUPLICATE", move_file, "id", move_id, "move IDs referenced by slots must be unique")
+		else:
+			seen_move_ids[move_id] = true
+		if not hitbox_raws.has(slot):
+			_add_error(errors, "CFG_HITBOX_REQUIRED_MISSING", "%s/hitboxes/%s.json" % [draft_file, move_name], "<hitbox>", "<missing>", "draft must provide the %s hitbox profile" % slot)
+			continue
+		var hitbox_raw_value: Variant = hitbox_raws[slot]
+		if not hitbox_raw_value is Dictionary:
+			_add_error(errors, "CFG_HITBOX_INVALID", "%s/hitboxes/%s.json" % [draft_file, move_name], "<root>", hitbox_raw_value, "must be an object")
+			continue
+		var hitbox_raw: Dictionary = hitbox_raw_value
+		_normalize_hitbox_profile(
+			hitbox_raw,
+			"%s/hitboxes/%s.json" % [draft_file, move_name],
+			move_data,
+			errors
+		)
+	for slot in MOVE_SLOTS:
+		if not move_refs.has(slot):
+			_add_error(errors, "CFG_MOVE_REQUIRED_MISSING", "%s/character.json" % draft_file, "moves.%s" % slot, "<missing>", "required move must resolve")
 	return errors
 
 
@@ -543,7 +597,11 @@ func _normalize_presentation(raw: Dictionary, file: String, root: String, move_s
 				var sprite_ref := _required_string(frame, "sprite", file, "%s.sprite" % prefix, errors)
 				var sprite_path := _resolve_reference(root, sprite_ref, file, "%s.sprite" % prefix, errors)
 				if not sprite_path.is_empty():
-					if not ResourceLoader.exists(sprite_path):
+					if root.begins_with("user://"):
+						var imported_image: Image = Image.new()
+						if not FileAccess.file_exists(sprite_path) or imported_image.load(sprite_path) != OK or imported_image.is_empty():
+							_add_error(errors, "CFG_SPRITE_MISSING", file, "%s.sprite" % prefix, sprite_ref, "imported image must exist and decode")
+					elif not ResourceLoader.exists(sprite_path):
 						_add_error(errors, "CFG_SPRITE_MISSING", file, "%s.sprite" % prefix, sprite_ref, "resource must exist and load as Texture2D")
 					else:
 						var resource := ResourceLoader.load(sprite_path)
@@ -651,6 +709,16 @@ func _normalize_builtin_root(root: String, file: String, errors: Array[Dictionar
 		return ""
 	var normalized := root.trim_suffix("/")
 	return normalized
+
+
+func _normalize_character_root(root: String, file: String, errors: Array[Dictionary]) -> String:
+	if root.begins_with("res://"):
+		return _normalize_builtin_root(root, file, errors)
+	var imported_id: String = root.trim_prefix("user://characters/")
+	if not root.begins_with("user://characters/") or imported_id.is_empty() or imported_id.contains("/") or imported_id.contains("\\") or imported_id.contains("..") or not _is_valid_id(imported_id):
+		_add_error(errors, "CFG_IMPORTED_ROOT_INVALID", file, "character_root", root, "must be exactly user://characters/<safe_fighter_id>")
+		return ""
+	return root.trim_suffix("/")
 
 
 func _resolve_reference(root: String, reference: String, file: String, field: String, errors: Array[Dictionary]) -> String:

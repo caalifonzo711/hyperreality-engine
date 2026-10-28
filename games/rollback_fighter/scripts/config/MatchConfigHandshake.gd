@@ -2,7 +2,7 @@ extends RefCounted
 class_name RollbackFighterMatchConfigHandshake
 
 
-const PROTOCOL_VERSION: int = 1
+const PROTOCOL_VERSION: int = 2
 const MAX_CANONICAL_BYTE_LENGTH: int = 1048576
 const MAX_FIGHTER_ID_LENGTH: int = 64
 
@@ -20,15 +20,36 @@ func build_local_identity(
 	p2: RollbackFighterCharacterDefinition
 ) -> Dictionary:
 	var canonical_bytes: PackedByteArray = writer.match_bytes(rules, p1, p2)
+	return build_identity(
+		"rollback_fighter",
+		rules.get_int("config_version"),
+		p1.get_id(), p1.get_config_version(),
+		p2.get_id(), p2.get_config_version(),
+		canonical_bytes,
+		writer.sha256_hex(canonical_bytes)
+	)
+
+
+func build_identity(
+	game_id: String,
+	rules_version: int,
+	p1_id: String,
+	p1_version: int,
+	p2_id: String,
+	p2_version: int,
+	canonical_bytes: PackedByteArray,
+	digest: String
+) -> Dictionary:
 	return {
 		"protocol_version": PROTOCOL_VERSION,
-		"rules_config_version": rules.get_int("config_version"),
-		"p1_id": p1.get_id(),
-		"p1_config_version": p1.get_config_version(),
-		"p2_id": p2.get_id(),
-		"p2_config_version": p2.get_config_version(),
+		"game_id": game_id,
+		"rules_config_version": rules_version,
+		"p1_id": p1_id,
+		"p1_config_version": p1_version,
+		"p2_id": p2_id,
+		"p2_config_version": p2_version,
 		"canonical_byte_length": canonical_bytes.size(),
-		"digest": writer.sha256_hex(canonical_bytes),
+		"digest": digest,
 	}
 
 
@@ -49,6 +70,8 @@ func accept_remote_identity(candidate: Dictionary) -> Dictionary:
 
 	if int(candidate["protocol_version"]) != int(local_identity["protocol_version"]):
 		return _fail("CONFIG HANDSHAKE VERSION MISMATCH")
+	if str(candidate["game_id"]) != str(local_identity["game_id"]):
+		return _fail("Game/template mismatch: local=%s remote=%s." % [str(local_identity["game_id"]), str(candidate["game_id"])])
 	if int(candidate["rules_config_version"]) != int(local_identity["rules_config_version"]):
 		return _fail("Game rules config version mismatch.")
 	if (
@@ -56,7 +79,7 @@ func accept_remote_identity(candidate: Dictionary) -> Dictionary:
 		or str(candidate["p2_id"]) != str(local_identity["p2_id"])
 	):
 		return _fail(
-			"Fighter ID mismatch: local P1=%s P2=%s; remote P1=%s P2=%s."
+			"Match slot ID mismatch: local P1=%s P2=%s; remote P1=%s P2=%s."
 			% [
 				str(local_identity["p1_id"]),
 				str(local_identity["p2_id"]),
@@ -91,6 +114,7 @@ func may_start_match(networked: bool) -> bool:
 func _validate_identity(identity: Dictionary) -> Dictionary:
 	var required_fields: Array[String] = [
 		"protocol_version",
+		"game_id",
 		"rules_config_version",
 		"p1_id",
 		"p1_config_version",
@@ -125,7 +149,7 @@ func _validate_identity(identity: Dictionary) -> Dictionary:
 	if byte_length <= 0 or byte_length > MAX_CANONICAL_BYTE_LENGTH:
 		return {"ok": false, "message": "Handshake canonical byte length is out of range."}
 
-	for field in ["p1_id", "p2_id"]:
+	for field in ["game_id", "p1_id", "p2_id"]:
 		if typeof(identity[field]) != TYPE_STRING:
 			return {"ok": false, "message": "Handshake fighter ID has invalid type: %s." % field}
 		if not _is_valid_fighter_id(str(identity[field])):

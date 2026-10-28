@@ -516,7 +516,8 @@ func _do_damage(
 	# -----------------------------------------
 
 	if defender.invulnerable:
-		print("[Combat] DODGED!")
+		if OS.is_debug_build():
+			print("[Combat] DODGED!")
 
 		attacker.hit_confirmed = true
 
@@ -549,7 +550,8 @@ func _do_damage(
 		_hitstop_frames = hitstop_frames
 		_apply_blocked_guard_damage(move_definition, defender)
 
-		print("[Combat] BLOCKED!")
+		if OS.is_debug_build():
+			print("[Combat] BLOCKED!")
 
 	else:
 		var defender_id: int = _get_pid(defender)
@@ -603,14 +605,15 @@ func _do_damage(
 
 	var attacker_id: int = _get_pid(attacker)
 
-	print(
-		"[Combat] P",
-		attacker_id,
-		" HIT! dmg=",
-		dmg,
-		" target_hp=",
-		defender.hp
-	)
+	if OS.is_debug_build():
+		print(
+			"[Combat] P",
+			attacker_id,
+			" HIT! dmg=",
+			dmg,
+			" target_hp=",
+			defender.hp
+		)
 
 
 # =================================================

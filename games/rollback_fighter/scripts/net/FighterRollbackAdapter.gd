@@ -1,4 +1,4 @@
-extends Node
+extends RollbackSimulationAdapter
 class_name FighterRollbackAdapter
 
 # Player state refs (wired by ArenaScene)
@@ -65,13 +65,6 @@ var _p1_heavy_buf: int = 0
 var _p2_light_buf: int = 0
 var _p2_heavy_buf: int = 0
 
-# Non-authoritative first-mismatch report retained for the benchmark summary.
-var first_debug_frame: int = -1
-var first_debug_field: String = ""
-var first_debug_local: String = ""
-var first_debug_remote: String = ""
-
-
 func setup(
 	_p1: PlayerState,
 	_p2: PlayerState,
@@ -93,6 +86,42 @@ func setup(
 	_world_contact_right = float(_game_rules.get_world_contact_bound("right"))
 	_world_contact_top = float(_game_rules.get_world_contact_bound("top"))
 	_world_contact_bottom = float(_game_rules.get_world_contact_bound("bottom"))
+
+
+func neutral_input() -> Dictionary:
+	return {
+		"mx": 0.0,
+		"lean_l": false,
+		"lean_r": false,
+		"atk_l": false,
+		"atk_h": false,
+		"block": false,
+		"dodge": false,
+	}
+
+
+func validate_input_data(input_data: Dictionary) -> bool:
+	if not input_data.has("mx"):
+		return false
+	var mx_type: int = typeof(input_data["mx"])
+	if mx_type != TYPE_FLOAT and mx_type != TYPE_INT:
+		return false
+	for field: String in ["lean_l", "lean_r", "atk_l", "atk_h", "block", "dodge"]:
+		if not input_data.has(field) or typeof(input_data[field]) != TYPE_BOOL:
+			return false
+	return true
+
+
+func inputs_equal(a: Dictionary, b: Dictionary) -> bool:
+	return (
+		float(a.get("mx", 0.0)) == float(b.get("mx", 0.0))
+		and bool(a.get("lean_l", false)) == bool(b.get("lean_l", false))
+		and bool(a.get("lean_r", false)) == bool(b.get("lean_r", false))
+		and bool(a.get("atk_l", false)) == bool(b.get("atk_l", false))
+		and bool(a.get("atk_h", false)) == bool(b.get("atk_h", false))
+		and bool(a.get("block", false)) == bool(b.get("block", false))
+		and bool(a.get("dodge", false)) == bool(b.get("dodge", false))
+	)
 
 
 func simulate(local: Dictionary, remote: Dictionary, dt: float) -> void:
@@ -231,7 +260,8 @@ func canonical_checksum(snapshot: Dictionary) -> int:
 func report_first_debug_difference(
 	frame: int,
 	local_snapshot: Dictionary,
-	remote_values: Array
+	remote_values: Array,
+	_remote_checksum: int = 0
 ) -> void:
 	var local_values: Array = canonical_debug_values(local_snapshot)
 	var count: int = mini(local_values.size(), remote_values.size())
@@ -280,13 +310,14 @@ func _print_debug_difference(
 	first_debug_local = var_to_str(local_value)
 	first_debug_remote = var_to_str(remote_value)
 
-	print("")
-	print("FIRST STATE DIVERGENCE")
-	print("frame=%d" % frame)
-	print("field=%s" % field)
-	print("local=%s" % var_to_str(local_value))
-	print("remote=%s" % var_to_str(remote_value))
-	print("")
+	if OS.is_debug_build():
+		print("")
+		print("FIRST STATE DIVERGENCE")
+		print("frame=%d" % frame)
+		print("field=%s" % field)
+		print("local=%s" % var_to_str(local_value))
+		print("remote=%s" % var_to_str(remote_value))
+		print("")
 
 
 func restore(s: Dictionary) -> void:

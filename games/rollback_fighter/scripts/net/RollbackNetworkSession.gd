@@ -108,7 +108,7 @@ var repair_unavailable_error: bool = false
 var repair_unavailable_count: int = 0
 var match_started: bool = false
 
-var adapter: FighterRollbackAdapter = null
+var adapter: RollbackSimulationAdapter = null
 var transport: Node = null
 var _repair_tick: int = 0
 var _pending_repair_frame: int = -1
@@ -163,19 +163,11 @@ var _first_state_debug_frame: int = -1
 # Prediction cache
 # =================================================
 
-var _last_remote_input: Dictionary = {
-	"mx": 0.0,
-	"lean_l": false,
-	"lean_r": false,
-	"atk_l": false,
-	"atk_h": false,
-	"block": false,
-	"dodge": false,
-}
+var _last_remote_input: Dictionary = {}
 
 
 func setup(
-	_adapter: FighterRollbackAdapter,
+	_adapter: RollbackSimulationAdapter,
 	_transport: Node,
 	_player_id: int = 1
 ) -> void:
@@ -631,15 +623,9 @@ func _handle_sync_telemetry(packet: Dictionary) -> void:
 
 
 func _empty_input() -> Dictionary:
-	return {
-		"mx": 0.0,
-		"lean_l": false,
-		"lean_r": false,
-		"atk_l": false,
-		"atk_h": false,
-		"block": false,
-		"dodge": false,
-	}
+	if adapter == null:
+		return {}
+	return adapter.neutral_input()
 
 
 func _build_input_history(input_frame: int) -> Array[Dictionary]:
@@ -891,7 +877,7 @@ func _try_compare_checksum(
 	_refresh_checksum_status()
 
 	# Follow the earliest mismatch that remains unresolved after replay.
-	if (
+	if OS.is_debug_build() and (
 		player_id == 1
 		and _first_state_debug_frame != first_checksum_mismatch_frame
 	):
@@ -1191,43 +1177,14 @@ func _predict_remote_input(frame: int) -> Dictionary:
 # =================================================
 
 func _is_valid_input_data(input_data: Dictionary) -> bool:
-	if not input_data.has("mx"):
-		return false
-
-	var mx_type: int = typeof(input_data["mx"])
-	if mx_type != TYPE_FLOAT and mx_type != TYPE_INT:
-		return false
-
-	for field: String in [
-		"lean_l",
-		"lean_r",
-		"atk_l",
-		"atk_h",
-		"block",
-		"dodge",
-	]:
-		if not input_data.has(field):
-			return false
-
-		if typeof(input_data[field]) != TYPE_BOOL:
-			return false
-
-	return true
+	return adapter != null and adapter.validate_input_data(input_data)
 
 
 func _inputs_equal(
 	a: Dictionary,
 	b: Dictionary
 ) -> bool:
-	return (
-		float(a.get("mx", 0.0)) == float(b.get("mx", 0.0))
-		and bool(a.get("lean_l", false)) == bool(b.get("lean_l", false))
-		and bool(a.get("lean_r", false)) == bool(b.get("lean_r", false))
-		and bool(a.get("atk_l", false)) == bool(b.get("atk_l", false))
-		and bool(a.get("atk_h", false)) == bool(b.get("atk_h", false))
-		and bool(a.get("block", false)) == bool(b.get("block", false))
-		and bool(a.get("dodge", false)) == bool(b.get("dodge", false))
-	)
+	return adapter != null and adapter.inputs_equal(a, b)
 
 
 func _append_valid_input_record(
@@ -1467,7 +1424,8 @@ func _on_packet_received(packet: Dictionary) -> void:
 		return
 
 	if packet_type == "first_state_debug":
-		_handle_first_state_debug(packet)
+		if OS.is_debug_build():
+			_handle_first_state_debug(packet)
 		return
 
 	# =================================================

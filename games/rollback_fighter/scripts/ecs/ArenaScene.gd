@@ -2,22 +2,12 @@ extends Node2D
 
 # ArenaScene.gd — ENet rollback fighter arena + deterministic QA bot benchmark
 
-# -------------------------------------------------
-# Machine config
-# DESKTOP:
-#   ENET_HOST := true
-#   ENET_IP := "xxx.x.x.x"
-#
-# LAPTOP:
-#   ENET_HOST := false
-#   ENET_IP := "DESKTOP_IPV4_HERE"
-# -------------------------------------------------
-
-
-const USE_ENET := true #check #back to laptop
-const ENET_HOST := true #check 
-const ENET_IP := "127.0.0.1" #check
-const ENET_PORT := 7777
+# Direct FighterArena scene runs (e.g. editor F6) retain explicit debug defaults.
+# Normal product startup always supplies a one-shot NetworkLaunchConfig from MainMenu.
+const DEBUG_DIRECT_RUN_USE_ENET := true
+const DEBUG_DIRECT_RUN_ENET_HOST := true
+const DEBUG_DIRECT_RUN_ENET_IP := "127.0.0.1"
+const DEBUG_DIRECT_RUN_ENET_PORT := 7777
 
 # -------------------------------------------------
 # Benchmark config
@@ -32,6 +22,8 @@ const QA_STRESS_BENCHMARK_ENABLED := false
 const QA_STRESS_FORCE_PACKET_LOSS := false
 const STRESS_SCHEDULE_FRAMES := 7200
 const STRESS_DRAIN_FRAMES := 120
+
+
 const STRESS_TOTAL_FRAMES := STRESS_SCHEDULE_FRAMES + STRESS_DRAIN_FRAMES
 const STRESS_CYCLE_FRAMES := 1200
 
@@ -72,12 +64,19 @@ const CombatFuzzBenchmarkScript = preload(
 const CharacterDefinitionLoaderScript = preload(
 	"res://games/rollback_fighter/scripts/config/CharacterDefinitionLoader.gd"
 )
+const FighterProviderScript = preload(
+	"res://games/rollback_fighter/scripts/config/ImportedFighterProvider.gd"
+)
 const CanonicalConfigWriterScript = preload(
 	"res://games/rollback_fighter/scripts/config/CanonicalConfigWriter.gd"
 )
 const MatchConfigHandshakeScript = preload(
 	"res://games/rollback_fighter/scripts/config/MatchConfigHandshake.gd"
 )
+const SimpleFighterCPUScript = preload(
+	"res://games/rollback_fighter/scripts/ai/SimpleFighterCPU.gd"
+)
+const SINGLE_PLAYER_PHYS_DT := 1.0 / 60.0
 
 const CHARACTER_REGISTRY_PATH := \
 	"res://games/rollback_fighter/config/builtin_fighters.json"
@@ -85,6 +84,7 @@ const GAME_RULES_CONFIG_PATH := \
 	"res://games/rollback_fighter/config/game_rules.json"
 const P1_FIGHTER_ID := "example_fighter"
 const P2_FIGHTER_ID := "example_fighter_alt"
+enum MatchLifecycle { SETUP, WAITING_FOR_PEER, READY, PLAYING, FINISHED }
 
 
 var rollback_session: Node = null
@@ -100,6 +100,35 @@ var _local_match_config_identity: Dictionary = {}
 var _config_handshake_sent: bool = false
 var _remote_config_identity_received: bool = false
 var _pending_start_match_received: bool = false
+var _use_enet: bool = true
+var _is_host: bool = true
+var _enet_address: String = DEBUG_DIRECT_RUN_ENET_IP
+var _enet_port: int = DEBUG_DIRECT_RUN_ENET_PORT
+var _connection_failure_message: String = ""
+var _return_menu_button: Button = null
+var _host_start_button: Button = null
+var _mobile_controls: Control = null
+var _touch_left_held: bool = false
+var _touch_right_held: bool = false
+var _touch_block_held: bool = false
+var _touch_light_pending: bool = false
+var _touch_heavy_pending: bool = false
+var _touch_dodge_pending: bool = false
+var _returning_to_menu: bool = false
+var _single_player_mode: bool = false
+var _single_player_started: bool = false
+var _single_player_frame: int = 0
+var _single_player_cpu: RefCounted = null
+var _match_mode: String = ""
+var _p1_fighter_id: String = P1_FIGHTER_ID
+var _p2_fighter_id: String = P2_FIGHTER_ID
+var _match_lifecycle: MatchLifecycle = MatchLifecycle.SETUP
+var _fighter_selection_sent: bool = false
+var _fighter_selection_received: bool = false
+var _fighter_selection_acknowledged: bool = false
+var _result_overlay: Control = null
+var _result_title: Label = null
+var _result_shown: bool = false
 
 var benchmark_running: bool = false
 var benchmark_complete: bool = false
@@ -192,15 +221,33 @@ var _presentation_max_prediction_lead: int = 0
 
 
 func _ready() -> void:
-	print("[Arena] _ready")
+	if OS.is_debug_build():
+		print("[Arena] _ready")
+	_configure_network_launch()
+	_create_return_menu_button()
+	_create_host_start_button()
+	_create_result_overlay()
+	if not _connection_failure_message.is_empty():
+		_set_connection_status(
+			"Please launch from the Main Menu.\nPress Main Menu to return."
+			if _connection_failure_message == "Please launch from the Main Menu."
+			else "Connection settings are invalid.\nPress Main Menu to return."
+		)
+		set_physics_process(false)
+		return
 	_setup_tuning_panel()
+	_setup_mobile_controls()
 	if not _load_authoritative_fighter_definitions():
 		push_error(
 			"[CharacterDefinition] Match setup stopped: "
 			+ "authoritative fighter definitions failed to load."
 		)
 		if play_status_label != null:
-			play_status_label.text = "CHARACTER CONFIG ERROR"
+			play_status_label.text = (
+				"Fighter not installed on both devices."
+				if _has_imported_fighter_selection()
+				else "CHARACTER CONFIG ERROR"
+			)
 		set_physics_process(false)
 		return
 
@@ -262,41 +309,61 @@ func _ready() -> void:
 		_game_rules_definition
 	)
 
-	if USE_ENET:
-		transport = ENetTransportScene.new()
-		transport.name = "ENetTransport"
-		transport.artificial_delay_frames = BENCHMARK_DELAY_FRAMES
-		transport.artificial_jitter_frames = BENCHMARK_JITTER_FRAMES
-		transport.deterministic_stress_input_loss_enabled = (
-			(QA_STRESS_BENCHMARK_ENABLED or QA_COMBAT_FUZZ_BENCHMARK_ENABLED)
-			and QA_STRESS_FORCE_PACKET_LOSS
-		)
-		add_child(transport)
-
-		if ENET_HOST:
-			local_player_id = 1
-			transport.host(ENET_PORT)
-			print("[Arena] ENet HOST mode | player_id=1 | port=%d" % ENET_PORT)
-		else:
-			local_player_id = 2
-			transport.join(ENET_IP, ENET_PORT)
-			print("[Arena] ENet CLIENT mode | player_id=2 | joining %s:%d" % [ENET_IP, ENET_PORT])
-	else:
-		transport = LatencyHarnessTransportScene.new()
-		transport.delay_frames = BENCHMARK_DELAY_FRAMES
-		add_child(transport)
+	if _single_player_mode:
+		_single_player_cpu = SimpleFighterCPUScript.new()
+		_single_player_frame = 0
+		_single_player_started = true
+		_match_lifecycle = MatchLifecycle.PLAYING
 		local_player_id = 1
-		print("[Arena] LatencyHarness mode | player_id=1")
+		_set_connection_status("P1 vs CPU")
+		if OS.is_debug_build():
+			print("[Arena] Single Player mode | P1=human | P2=deterministic CPU")
+	else:
+		if _use_enet:
+			transport = ENetTransportScene.new()
+			transport.name = "ENetTransport"
+			transport.artificial_delay_frames = (
+				BENCHMARK_DELAY_FRAMES if OS.is_debug_build() else 0
+			)
+			transport.artificial_jitter_frames = (
+				BENCHMARK_JITTER_FRAMES if OS.is_debug_build() else 0
+			)
+			transport.deterministic_stress_input_loss_enabled = OS.is_debug_build() and (
+				(QA_STRESS_BENCHMARK_ENABLED or QA_COMBAT_FUZZ_BENCHMARK_ENABLED)
+				and QA_STRESS_FORCE_PACKET_LOSS
+			)
+			add_child(transport)
+			_connect_transport_signals()
+			if _is_host:
+				local_player_id = 1
+				transport.host(_enet_port)
+				if OS.is_debug_build():
+					print("[Arena] ENet HOST mode | player_id=1 | port=%d" % _enet_port)
+			else:
+				local_player_id = 2
+				transport.join(_enet_address, _enet_port)
+				if OS.is_debug_build():
+					print("[Arena] ENet CLIENT mode | player_id=2 | joining %s:%d" % [_enet_address, _enet_port])
+		else:
+			_match_lifecycle = MatchLifecycle.WAITING_FOR_PEER
+			transport = LatencyHarnessTransportScene.new()
+			transport.delay_frames = BENCHMARK_DELAY_FRAMES
+			add_child(transport)
+			local_player_id = 1
+			if OS.is_debug_build():
+				print("[Arena] LatencyHarness mode | player_id=1")
 
-	rollback_session = RollbackNetworkSessionScene.new()
-	add_child(rollback_session)
-	rollback_session.setup(adapter, transport, local_player_id)
-	rollback_session.input_delay_frames = BENCHMARK_INPUT_DELAY_FRAMES
-	if rollback_session.has_signal("rollback_correction_applied"):
-		rollback_session.rollback_correction_applied.connect(
-			_on_rollback_correction_applied
+		rollback_session = RollbackNetworkSessionScene.new()
+		add_child(rollback_session)
+		rollback_session.setup(adapter, transport, local_player_id)
+		rollback_session.input_delay_frames = (
+			BENCHMARK_INPUT_DELAY_FRAMES if OS.is_debug_build() else 0
 		)
-	
+		if rollback_session.has_signal("rollback_correction_applied"):
+			rollback_session.rollback_correction_applied.connect(
+				_on_rollback_correction_applied
+			)
+
 	if hud:
 		hud.set("p1_state", player_state)
 		hud.set("p2_state", opponent_state)
@@ -304,7 +371,7 @@ func _ready() -> void:
 	if transport != null and transport.has_signal("start_match_received"):
 		if not transport.start_match_received.is_connected(_on_start_match_received):
 			transport.start_match_received.connect(_on_start_match_received)
-	if USE_ENET and transport != null:
+	if _use_enet and transport != null:
 		if transport.has_signal("match_config_received"):
 			if not transport.match_config_received.is_connected(
 				_on_match_config_received
@@ -312,26 +379,24 @@ func _ready() -> void:
 				transport.match_config_received.connect(
 					_on_match_config_received
 				)
-		if transport.has_signal("connected"):
-			if not transport.connected.is_connected(_on_transport_connected):
-				transport.connected.connect(_on_transport_connected)
 		_begin_config_handshake()
 
-	var enabled_benchmark_count: int = (
+	var enabled_benchmark_count: int = (int(OS.is_debug_build()) * (
 		int(QA_BOT_BENCHMARK_ENABLED)
 		+ int(QA_STRESS_BENCHMARK_ENABLED)
 		+ int(QA_COMBAT_FUZZ_BENCHMARK_ENABLED)
-	)
+	))
 	if enabled_benchmark_count > 1:
 		push_error("[Arena] Enable only one QA benchmark mode at a time.")
 
-	print("[Arena] Benchmark config | mode=%s delay=%d jitter=%d duration=%d" % [
-		_benchmark_mode_name(),
-		BENCHMARK_DELAY_FRAMES,
-		BENCHMARK_JITTER_FRAMES,
-		_benchmark_duration_frames()
-	])
-	_reset_presentation_measurement(false)
+	if OS.is_debug_build():
+		print("[Arena] Benchmark config | mode=%s delay=%d jitter=%d duration=%d" % [
+			_benchmark_mode_name(),
+			BENCHMARK_DELAY_FRAMES,
+			BENCHMARK_JITTER_FRAMES,
+			_benchmark_duration_frames()
+		])
+		_reset_presentation_measurement(false)
 
 
 func _setup_tuning_panel() -> void:
@@ -347,31 +412,28 @@ func _setup_tuning_panel() -> void:
 	_tuning_panel.name = "FighterTuningPanel"
 	_tuning_panel.reload_requested.connect(_on_tuning_reload_requested)
 	add_child(_tuning_panel)
-	_tuning_panel.call("configure", CHARACTER_REGISTRY_PATH, USE_ENET)
+	_tuning_panel.call("configure", CHARACTER_REGISTRY_PATH, _use_enet)
 
 
 func _on_tuning_reload_requested() -> void:
-	if USE_ENET:
+	if _use_enet:
 		return
+	if _single_player_mode:
+		var launch_config: Node = get_node_or_null("/root/NetworkLaunchConfig")
+		if launch_config != null:
+			launch_config.call("set_single_player")
 	get_tree().root.set_meta("tuning_ui_reload_pending", true)
 	get_tree().call_deferred("reload_current_scene")
 
 
 func _load_authoritative_fighter_definitions() -> bool:
-	var loader: RollbackFighterCharacterDefinitionLoader = (
-		CharacterDefinitionLoaderScript.new()
-	)
+	var loader: RollbackFighterCharacterDefinitionLoader = CharacterDefinitionLoaderScript.new()
+	var fighter_provider: RollbackFighterImportedFighterProvider = FighterProviderScript.new()
 	var rules_result: Dictionary = loader.load_game_rules(
 		GAME_RULES_CONFIG_PATH
 	)
-	var p1_result: Dictionary = loader.load_builtin_fighter(
-		CHARACTER_REGISTRY_PATH,
-		P1_FIGHTER_ID
-	)
-	var p2_result: Dictionary = loader.load_builtin_fighter(
-		CHARACTER_REGISTRY_PATH,
-		P2_FIGHTER_ID
-	)
+	var p1_result: Dictionary = fighter_provider.load_fighter(_p1_fighter_id)
+	var p2_result: Dictionary = fighter_provider.load_fighter(_p2_fighter_id)
 
 	var errors: Array = []
 	if not bool(rules_result.get("ok", false)):
@@ -387,7 +449,8 @@ func _load_authoritative_fighter_definitions() -> bool:
 			+ "(%d error(s))." % errors.size()
 		)
 		for error_variant in errors:
-			print(loader.format_error(error_variant))
+			if OS.is_debug_build():
+				print(loader.format_error(error_variant))
 		return false
 
 	_game_rules_definition = rules_result["definition"]
@@ -409,52 +472,55 @@ func _load_authoritative_fighter_definitions() -> bool:
 		_local_match_config_identity["canonical_byte_length"]
 	)
 	var digest: String = str(_local_match_config_identity["digest"])
-	print("[ConfigHandshake] local digest ready")
-	print("protocol_version=%d rules_config_version=%d p1_config_version=%d p2_config_version=%d" % [
-		int(_local_match_config_identity["protocol_version"]),
-		int(_local_match_config_identity["rules_config_version"]),
-		int(_local_match_config_identity["p1_config_version"]),
-		int(_local_match_config_identity["p2_config_version"]),
-	])
-	print("digest=%s" % digest)
-	print("p1=%s" % str(_local_match_config_identity["p1_id"]))
-	print("p2=%s" % str(_local_match_config_identity["p2_id"]))
-	print("[CharacterDefinition] authoritative fighter mode active")
-	_print_fighter_definition_summary("P1", _p1_character_definition)
-	_print_fighter_definition_summary("P2", _p2_character_definition)
-	_print_presentation_summary(_p1_character_definition)
-	_print_presentation_summary(_p2_character_definition)
-	_print_game_rules_summary(_game_rules_definition)
-	_print_match_definitions_summary(
-		_p1_character_definition,
-		_p2_character_definition,
-		canonical_byte_length,
-		digest
-	)
-	print("attacks:")
-	print("light=%s" % _attack_definition_summary(
-		_p1_character_definition.get_move_for_slot("light")
-	))
-	print("heavy=%s" % _attack_definition_summary(
-		_p1_character_definition.get_move_for_slot("heavy")
-	))
-	print("config_version=%d" % _p1_character_definition.get_config_version())
-	print("canonical_byte_length=%d" % canonical_byte_length)
-	print("auth_digest=%s" % digest)
-	print("[ConfigParity]")
-	print("platform=%s" % OS.get_name())
-	print("p1=%s" % _p1_character_definition.get_id())
-	print("p2=%s" % _p2_character_definition.get_id())
-	print("canonical_byte_length=%d" % canonical_byte_length)
-	print("auth_digest=%s" % digest)
-	print("normalized_authoritative_config_p1:\n%s" % writer.normalized_dump(
-		_game_rules_definition,
-		_p1_character_definition
-	))
-	print("normalized_authoritative_config_p2:\n%s" % writer.normalized_dump(
-		_game_rules_definition,
-		_p2_character_definition
-	))
+	if OS.is_debug_build():
+		print("[ConfigHandshake] local digest ready")
+		print("protocol_version=%d rules_config_version=%d p1_config_version=%d p2_config_version=%d" % [
+			int(_local_match_config_identity["protocol_version"]),
+			int(_local_match_config_identity["rules_config_version"]),
+			int(_local_match_config_identity["p1_config_version"]),
+			int(_local_match_config_identity["p2_config_version"]),
+		])
+		print("digest=%s" % digest)
+		print("p1=%s" % str(_local_match_config_identity["p1_id"]))
+		print("p2=%s" % str(_local_match_config_identity["p2_id"]))
+		print("[CharacterDefinition] authoritative fighter mode active")
+		_print_fighter_definition_summary("P1", _p1_character_definition)
+		_print_fighter_definition_summary("P2", _p2_character_definition)
+		_print_presentation_summary(_p1_character_definition)
+		_print_presentation_summary(_p2_character_definition)
+		_print_game_rules_summary(_game_rules_definition)
+		_print_match_definitions_summary(
+			_p1_character_definition,
+			_p2_character_definition,
+			canonical_byte_length,
+			digest
+		)
+		print("attacks:")
+		print("light=%s" % _attack_definition_summary(
+			_p1_character_definition.get_move_for_slot("light")
+		))
+		print("heavy=%s" % _attack_definition_summary(
+			_p1_character_definition.get_move_for_slot("heavy")
+		))
+		print("config_version=%d" % _p1_character_definition.get_config_version())
+		print("canonical_byte_length=%d" % canonical_byte_length)
+		print("auth_digest=%s" % digest)
+		print("[ConfigParity]")
+		print("platform=%s" % OS.get_name())
+		print("p1=%s" % _p1_character_definition.get_id())
+		print("p2=%s" % _p2_character_definition.get_id())
+		print("canonical_byte_length=%d" % canonical_byte_length)
+		print("auth_digest=%s" % digest)
+		print("normalized_authoritative_config_p1:\n%s" % writer.normalized_dump(
+			_game_rules_definition,
+			_p1_character_definition
+		))
+		print("normalized_authoritative_config_p2:\n%s" % writer.normalized_dump(
+			_game_rules_definition,
+			_p2_character_definition
+		))
+	else:
+		print("[Arena] Fighter and game configuration validated.")
 	var root_window: Window = get_tree().root
 	if root_window.has_meta("tuning_ui_reload_pending"):
 		root_window.remove_meta("tuning_ui_reload_pending")
@@ -464,11 +530,313 @@ func _load_authoritative_fighter_definitions() -> bool:
 
 
 func _on_transport_connected() -> void:
-	_begin_config_handshake()
+	_connection_failure_message = ""
+	if _is_host and int(transport.get("remote_peer_id")) > 0:
+		_set_connection_status("Player connected.\nSending fighter selection...")
+		_send_host_fighter_selection()
+	elif not _is_host:
+		_set_connection_status("Connected.\nWaiting for host fighter selection...")
+
+
+func _has_imported_fighter_selection() -> bool:
+	var registry_file: FileAccess = FileAccess.open(CHARACTER_REGISTRY_PATH, FileAccess.READ)
+	if registry_file == null:
+		return true
+	var parsed: Variant = JSON.parse_string(registry_file.get_as_text())
+	registry_file.close()
+	if not parsed is Dictionary:
+		return true
+	var fighters_value: Variant = Dictionary(parsed).get("fighters", {})
+	if not fighters_value is Dictionary:
+		return true
+	var fighters: Dictionary = fighters_value
+	return not fighters.has(_p1_fighter_id) or not fighters.has(_p2_fighter_id)
+
+
+func _configure_network_launch() -> void:
+	var launch_config: Node = get_node_or_null("/root/NetworkLaunchConfig")
+	var launch: Dictionary = {}
+	if launch_config != null:
+		launch = launch_config.call("consume")
+	if not launch.is_empty():
+		_use_enet = true
+		var mode: String = str(launch.get("mode", ""))
+		_p1_fighter_id = str(launch.get("p1_fighter_id", P1_FIGHTER_ID))
+		_p2_fighter_id = str(launch.get("p2_fighter_id", P2_FIGHTER_ID))
+		if mode == "single_player":
+			_match_mode = mode
+			_single_player_mode = true
+			_use_enet = false
+			_is_host = false
+			_set_connection_status("P1 vs CPU")
+			return
+		if mode != "host" and mode != "client":
+			_connection_failure_message = "Invalid network launch mode."
+			return
+		_is_host = mode == "host"
+		_match_mode = mode
+		_enet_address = str(launch.get("address", ""))
+		_enet_port = int(launch.get("port", 0))
+		if _enet_port < 1 or _enet_port > 65535 or (not _is_host and _enet_address.is_empty()):
+			_connection_failure_message = "Invalid network launch settings."
+			_use_enet = false
+			return
+		_set_connection_status(
+			"Hosting on port %d\nWaiting for player..." % _enet_port
+			if _is_host
+			else "Connecting to %s:%d..." % [_enet_address, _enet_port]
+		)
+		return
+	_match_mode = "debug"
+	_p1_fighter_id = P1_FIGHTER_ID
+	_p2_fighter_id = P2_FIGHTER_ID
+	if not OS.is_debug_build():
+		_connection_failure_message = "Please launch from the Main Menu."
+		_use_enet = false
+		return
+	_use_enet = DEBUG_DIRECT_RUN_USE_ENET
+	_is_host = DEBUG_DIRECT_RUN_ENET_HOST
+	_enet_address = DEBUG_DIRECT_RUN_ENET_IP
+	_enet_port = DEBUG_DIRECT_RUN_ENET_PORT
+	if _use_enet:
+		_set_connection_status(
+			"Hosting on port %d\nWaiting for player..." % _enet_port
+			if _is_host
+			else "Connecting to %s:%d..." % [_enet_address, _enet_port]
+		)
+
+
+func _connect_transport_signals() -> void:
+	if transport == null:
+		return
+	if transport.has_signal("connected") and not transport.connected.is_connected(_on_transport_connected):
+		transport.connected.connect(_on_transport_connected)
+	if transport.has_signal("connection_failed") and not transport.connection_failed.is_connected(_on_transport_connection_failed):
+		transport.connection_failed.connect(_on_transport_connection_failed)
+	if transport.has_signal("disconnected") and not transport.disconnected.is_connected(_on_transport_disconnected):
+		transport.disconnected.connect(_on_transport_disconnected)
+	if transport.has_signal("match_config_received") and not transport.match_config_received.is_connected(_on_match_config_received):
+		transport.match_config_received.connect(_on_match_config_received)
+	if transport.has_signal("match_selection_received") and not transport.match_selection_received.is_connected(_on_match_selection_received):
+		transport.match_selection_received.connect(_on_match_selection_received)
+	if transport.has_signal("match_selection_ack_received") and not transport.match_selection_ack_received.is_connected(_on_match_selection_ack_received):
+		transport.match_selection_ack_received.connect(_on_match_selection_ack_received)
+	if transport.has_signal("start_match_received") and not transport.start_match_received.is_connected(_on_start_match_received):
+		transport.start_match_received.connect(_on_start_match_received)
+
+
+func _create_return_menu_button() -> void:
+	if hud == null:
+		return
+	_return_menu_button = Button.new()
+	_return_menu_button.name = "ReturnToMenuButton"
+	_return_menu_button.text = "Main Menu"
+	_return_menu_button.custom_minimum_size = Vector2(120.0, 48.0)
+	_return_menu_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_return_menu_button.offset_left = -136.0
+	_return_menu_button.offset_top = -60.0
+	_return_menu_button.offset_right = -16.0
+	_return_menu_button.offset_bottom = -12.0
+	_return_menu_button.pressed.connect(_return_to_main_menu)
+	hud.add_child(_return_menu_button)
+
+
+func _create_host_start_button() -> void:
+	if hud == null:
+		return
+	_host_start_button = Button.new()
+	_host_start_button.name = "HostStartMatchButton"
+	_host_start_button.text = "START MATCH"
+	_host_start_button.custom_minimum_size = Vector2(220.0, 56.0)
+	_host_start_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_host_start_button.offset_left = -110.0
+	_host_start_button.offset_top = 112.0
+	_host_start_button.offset_right = 110.0
+	_host_start_button.offset_bottom = 168.0
+	_host_start_button.visible = false
+	_host_start_button.pressed.connect(_request_network_match_start)
+	hud.add_child(_host_start_button)
+
+
+func _setup_mobile_controls() -> void:
+	if hud == null or OS.get_name() != "Android":
+		return
+	_mobile_controls = Control.new()
+	_mobile_controls.name = "MobileGameplayControls"
+	_mobile_controls.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_mobile_controls.mouse_filter = Control.MOUSE_FILTER_PASS
+	hud.add_child(_mobile_controls)
+	var left_button: Button = _make_touch_button("LEFT", "left", 18, -106, 94, -30)
+	var right_button: Button = _make_touch_button("RIGHT", "right", 102, -106, 178, -30)
+	var jab_button: Button = _make_touch_button("JAB", "jab", -188, -190, -104, -112)
+	var heavy_button: Button = _make_touch_button("HEAVY", "heavy", -98, -190, -14, -112)
+	var block_button: Button = _make_touch_button("BLOCK", "block", -188, -102, -104, -24)
+	var dodge_button: Button = _make_touch_button("DODGE", "dodge", -98, -102, -14, -24)
+	for button: Button in [left_button, right_button, jab_button, heavy_button, block_button, dodge_button]:
+		button.add_theme_font_size_override("font_size", 16)
+	var controls_label: Label = hud.get_node_or_null("ControlsLabel") as Label
+	if controls_label != null:
+		controls_label.visible = false
+
+
+func _make_touch_button(
+	label_text: String,
+	action: String,
+	left: float,
+	top: float,
+	right: float,
+	bottom: float
+) -> Button:
+	var button: Button = Button.new()
+	button.text = label_text
+	button.custom_minimum_size = Vector2(76.0, 76.0)
+	button.set_anchors_and_offsets_preset(
+		Control.PRESET_BOTTOM_RIGHT if left < 0.0 else Control.PRESET_BOTTOM_LEFT
+	)
+	button.offset_left = left
+	button.offset_top = top
+	button.offset_right = right
+	button.offset_bottom = bottom
+	button.button_down.connect(_on_touch_button_down.bind(action))
+	button.button_up.connect(_on_touch_button_up.bind(action))
+	_mobile_controls.add_child(button)
+	return button
+
+
+func _on_touch_button_down(action: String) -> void:
+	if action == "left":
+		_touch_left_held = true
+	elif action == "right":
+		_touch_right_held = true
+	elif action == "block":
+		_touch_block_held = true
+
+
+func _on_touch_button_up(action: String) -> void:
+	if action == "left":
+		_touch_left_held = false
+	elif action == "right":
+		_touch_right_held = false
+	elif action == "block":
+		_touch_block_held = false
+	elif action == "jab":
+		_touch_light_pending = true
+	elif action == "heavy":
+		_touch_heavy_pending = true
+	elif action == "dodge":
+		_touch_dodge_pending = true
+
+
+func _create_result_overlay() -> void:
+	if hud == null:
+		return
+	_result_overlay = Control.new()
+	_result_overlay.name = "MatchResultOverlay"
+	_result_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_result_overlay.visible = false
+	_result_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	hud.add_child(_result_overlay)
+	var backdrop: ColorRect = ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.68)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_result_overlay.add_child(backdrop)
+	var center: CenterContainer = CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_result_overlay.add_child(center)
+	var panel: PanelContainer = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(
+		maxf(minf(get_viewport_rect().size.x - 32.0, 300.0), 240.0),
+		220.0
+	)
+	center.add_child(panel)
+	var content: VBoxContainer = VBoxContainer.new()
+	content.add_theme_constant_override("separation", 14)
+	panel.add_child(content)
+	_result_title = Label.new()
+	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_result_title.add_theme_font_size_override("font_size", 28)
+	content.add_child(_result_title)
+	var rematch_button: Button = Button.new()
+	rematch_button.name = "RematchButton"
+	rematch_button.text = "Rematch"
+	rematch_button.custom_minimum_size.y = 52.0
+	rematch_button.pressed.connect(_on_rematch_pressed)
+	content.add_child(rematch_button)
+	var menu_button: Button = Button.new()
+	menu_button.text = "Main Menu"
+	menu_button.custom_minimum_size.y = 52.0
+	menu_button.pressed.connect(_return_to_main_menu)
+	content.add_child(menu_button)
+	if _match_mode != "single_player":
+		rematch_button.disabled = true
+		rematch_button.text = "Network rematch unavailable"
+
+
+func _show_match_result() -> void:
+	if _result_shown or _result_overlay == null or combat_system == null:
+		return
+	_result_shown = true
+	_match_lifecycle = MatchLifecycle.FINISHED
+	if _single_player_mode:
+		_result_title.text = "YOU WIN" if combat_system.winner_id == 1 else "CPU WINS"
+	else:
+		_result_title.text = "PLAYER %d WINS" % combat_system.winner_id
+	_result_overlay.visible = true
+	if _return_menu_button != null:
+		_return_menu_button.visible = false
+
+
+func _on_rematch_pressed() -> void:
+	if _match_mode != "single_player":
+		return
+	var launch_config: Node = get_node_or_null("/root/NetworkLaunchConfig")
+	if launch_config == null:
+		return
+	launch_config.call("set_single_player")
+	launch_config.call("set_fighter_selection", _p1_fighter_id, _p2_fighter_id)
+	get_tree().reload_current_scene()
+
+
+func _set_connection_status(message: String) -> void:
+	if play_status_label != null:
+		play_status_label.text = message
+
+
+func _on_transport_connection_failed(reason: String) -> void:
+	if OS.is_debug_build():
+		push_warning("[Arena] Connection failed: %s" % reason)
+	_connection_failure_message = reason if OS.is_debug_build() else "Connection failed"
+	_set_connection_status("Connection failed.\nReturn to menu to try again.")
+
+
+func _on_transport_disconnected() -> void:
+	if not is_inside_tree():
+		return
+	_connection_failure_message = "Disconnected"
+	_set_connection_status("Disconnected.\nReturn to the Main Menu to reconnect.")
+
+
+func _return_to_main_menu() -> void:
+	if _returning_to_menu:
+		return
+	_returning_to_menu = true
+	var launch_config: Node = get_node_or_null("/root/NetworkLaunchConfig")
+	if launch_config != null:
+		launch_config.call("clear")
+	if transport != null and transport.has_method("shutdown"):
+		transport.call("shutdown")
+	get_tree().change_scene_to_file("res://games/rollback_fighter/scenes/MainMenu.tscn")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_return_to_main_menu()
 
 
 func _begin_config_handshake() -> void:
-	if not USE_ENET or transport == null or _config_handshake_sent:
+	if not _use_enet or transport == null or _config_handshake_sent:
+		return
+	if _match_mode in ["host", "client", "debug"] and not _fighter_selection_exchange_complete():
 		return
 	if not bool(transport.get("is_connected")):
 		return
@@ -479,7 +847,90 @@ func _begin_config_handshake() -> void:
 		return
 	_config_handshake_sent = true
 	transport.send_match_config(_local_match_config_identity)
-	print("[ConfigHandshake] local identity sent to connected peer")
+	if OS.is_debug_build():
+		print("[ConfigHandshake] local identity sent to connected peer")
+
+
+func _fighter_selection_exchange_complete() -> bool:
+	return _fighter_selection_acknowledged if _is_host else _fighter_selection_received
+
+
+func _send_host_fighter_selection() -> void:
+	if not _is_host or _fighter_selection_sent or transport == null:
+		return
+	if not transport.has_method("send_match_selection"):
+		_fail_config_handshake("Transport does not support fighter selection.")
+		return
+	if not bool(transport.call("send_match_selection", _p1_fighter_id, _p2_fighter_id)):
+		return
+	_fighter_selection_sent = true
+	if OS.is_debug_build():
+		print("[Arena] Host fighter selection sent: P1=%s P2=%s" % [
+			_p1_fighter_id, _p2_fighter_id
+		])
+
+
+func _on_match_selection_received(p1_id: String, p2_id: String) -> void:
+	if _is_host or rollback_session == null or bool(rollback_session.match_started):
+		return
+	if _fighter_selection_received:
+		if p1_id != _p1_fighter_id or p2_id != _p2_fighter_id:
+			_fail_config_handshake("Host changed fighter selection during startup.")
+		return
+	if not _apply_fighter_selection(p1_id, p2_id):
+		_fail_config_handshake("Fighter not installed on both devices.")
+		return
+	_fighter_selection_received = true
+	if transport != null and transport.has_method("send_match_selection_ack"):
+		if not bool(transport.call("send_match_selection_ack", p1_id, p2_id)):
+			_fail_config_handshake("Could not acknowledge host fighter selection.")
+			return
+	if OS.is_debug_build():
+		print("[Arena] Host fighter selection applied: P1=%s P2=%s" % [p1_id, p2_id])
+	_begin_config_handshake()
+
+
+func _on_match_selection_ack_received(p1_id: String, p2_id: String) -> void:
+	if not _is_host:
+		return
+	if p1_id != _p1_fighter_id or p2_id != _p2_fighter_id:
+		_fail_config_handshake("Client acknowledged a different fighter assignment.")
+		return
+	_fighter_selection_acknowledged = true
+	if OS.is_debug_build():
+		print("[Arena] Client acknowledged fighter selection.")
+	_begin_config_handshake()
+
+
+func _apply_fighter_selection(p1_id: String, p2_id: String) -> bool:
+	if p1_id == _p1_fighter_id and p2_id == _p2_fighter_id:
+		return true
+	if _match_config_handshake.verified or _config_handshake_sent:
+		return false
+	_p1_fighter_id = p1_id
+	_p2_fighter_id = p2_id
+	if not _load_authoritative_fighter_definitions():
+		return false
+	player_state.configure_character_definition(_p1_character_definition)
+	opponent_state.configure_character_definition(_p2_character_definition)
+	combat_system.configure_character_definitions(
+		_p1_character_definition,
+		_p2_character_definition,
+		_game_rules_definition
+	)
+	adapter.setup(
+		player_state, opponent_state, input_system, lean_system,
+		combat_system, _game_rules_definition
+	)
+	player_state.position = Vector2(_game_rules_definition.get_spawn_position("p1"))
+	opponent_state.position = Vector2(_game_rules_definition.get_spawn_position("p2"))
+	p1_sprite_debug = _bind_sprite_to_state(
+		p1_placeholder, player_state, _p1_character_definition, "P1"
+	)
+	p2_sprite_debug = _bind_sprite_to_state(
+		p2_placeholder, opponent_state, _p2_character_definition, "P2"
+	)
+	return true
 
 
 func _on_match_config_received(remote_identity: Dictionary) -> void:
@@ -494,15 +945,23 @@ func _on_match_config_received(remote_identity: Dictionary) -> void:
 		return
 	_remote_config_identity_received = true
 	var remote_digest: String = str(remote_identity.get("digest", "<invalid>"))
-	print("[ConfigHandshake] remote digest received")
-	print("digest=%s" % remote_digest)
+	if OS.is_debug_build():
+		print("[ConfigHandshake] remote digest received")
+		print("digest=%s" % remote_digest)
 	var result: Dictionary = _match_config_handshake.accept_remote_identity(
 		remote_identity
 	)
 	if not bool(result.get("ok", false)):
 		_fail_config_handshake(str(result.get("message", "CONFIG MISMATCH")))
 		return
-	print("[ConfigHandshake] MATCH CONFIG VERIFIED")
+	_match_lifecycle = MatchLifecycle.READY
+	if OS.is_debug_build():
+		print("[ConfigHandshake] MATCH CONFIG VERIFIED")
+	_set_connection_status(
+		"Ready. Select Start Match."
+		if _is_host
+		else "Ready. Waiting for host to start."
+	)
 	if _pending_start_match_received:
 		_pending_start_match_received = false
 		call_deferred("_on_start_match_received")
@@ -535,12 +994,13 @@ func _fail_config_handshake(message: String) -> void:
 			remote_p2,
 		]
 	)
-	push_error(diagnostic)
-	if play_status_label != null:
-		play_status_label.text = "CONFIG MISMATCH\nLocal: %s\nRemote: %s" % [
-			local_digest,
-			remote_digest,
-		]
+	push_error(diagnostic if OS.is_debug_build() else "Configuration mismatch. Both players must use matching fighter/game versions.")
+	_connection_failure_message = "Configuration mismatch"
+	_set_connection_status(
+		"Fighter not installed on both devices.\nPress Main Menu to exit."
+		if message.contains("Fighter not installed")
+		else "Configuration mismatch.\nBoth players must use matching fighter/game versions.\nPress Main Menu to exit."
+	)
 
 
 func _print_presentation_summary(
@@ -688,6 +1148,25 @@ func _physics_process(delta: float) -> void:
 	_physics_ticks_since_last_render += 1
 	_update_play_hud()
 
+	if _single_player_mode:
+		if _single_player_started and not combat_system.match_over:
+			var human_input: Dictionary = _collect_local_input()
+			var cpu_input: Dictionary = _single_player_cpu.call(
+				"input_for_frame",
+				_single_player_frame,
+				opponent_state,
+				player_state,
+				combat_system.match_over
+			)
+			adapter.simulate(human_input, cpu_input, SINGLE_PLAYER_PHYS_DT)
+			_single_player_frame += 1
+		_update_visuals()
+		_update_camera(delta)
+		_update_health_tint()
+		_update_combat_debug_hud()
+		_update_rollback_debug_hud()
+		return
+
 	if rollback_session and not bool(rollback_session.match_started):
 		_update_visuals()
 		_update_camera(delta)
@@ -714,7 +1193,11 @@ func _physics_process(delta: float) -> void:
 			_update_rollback_debug_hud()
 			return
 
-		var local_input: Dictionary = _collect_local_input()
+		var local_input: Dictionary = (
+			_stress_neutral_input()
+			if combat_system != null and combat_system.match_over
+			else _collect_local_input()
+		)
 		rollback_session.tick(local_input)
 
 		if benchmark_running:
@@ -731,34 +1214,44 @@ func _on_frame_pre_draw() -> void:
 	_last_render_physics_ticks = _physics_ticks_since_last_render
 	var correction_was_active: bool = _remote_render_correction_active
 	_advance_remote_render_correction()
-	_record_presentation_measurement(correction_was_active)
+	if OS.is_debug_build():
+		_record_presentation_measurement(correction_was_active)
 	_physics_ticks_since_last_render = 0
-	_update_visual_diagnostic_hud()
+	if OS.is_debug_build():
+		_update_visual_diagnostic_hud()
 
 
 func _collect_local_input() -> Dictionary:
 	if _tuning_panel != null and _tuning_panel.visible:
 		return _stress_neutral_input()
 
-	if QA_COMBAT_FUZZ_BENCHMARK_ENABLED:
+	if OS.is_debug_build() and not _single_player_mode and QA_COMBAT_FUZZ_BENCHMARK_ENABLED:
 		return _collect_combat_fuzz_input()
 
-	if QA_STRESS_BENCHMARK_ENABLED:
+	if OS.is_debug_build() and not _single_player_mode and QA_STRESS_BENCHMARK_ENABLED:
 		return _collect_stress_bot_input()
 
-	if QA_BOT_BENCHMARK_ENABLED:
+	if OS.is_debug_build() and not _single_player_mode and QA_BOT_BENCHMARK_ENABLED:
 		return _collect_bot_input()
 
-	var mx := Input.get_action_strength("p1_right") - Input.get_action_strength("p1_left")
+	var mx: float = Input.get_action_strength("p1_right") - Input.get_action_strength("p1_left")
+	mx += float(int(_touch_right_held) - int(_touch_left_held))
+	mx = clampf(mx, -1.0, 1.0)
+	var light_pressed: bool = Input.is_action_just_pressed("jab") or _touch_light_pending
+	var heavy_pressed: bool = Input.is_action_just_pressed("heavy_attack") or _touch_heavy_pending
+	var dodge_pressed: bool = Input.is_action_just_pressed("dodge") or _touch_dodge_pending
+	_touch_light_pending = false
+	_touch_heavy_pending = false
+	_touch_dodge_pending = false
 
 	return {
 		"mx": mx,
 		"lean_l": Input.is_action_pressed("lean_left"),
 		"lean_r": Input.is_action_pressed("lean_right"),
-		"atk_l": Input.is_action_just_pressed("jab"),
-		"atk_h": Input.is_action_just_pressed("heavy_attack"),
-		"block": Input.is_action_pressed("block"),
-		"dodge": Input.is_action_just_pressed("dodge"),
+		"atk_l": light_pressed,
+		"atk_h": heavy_pressed,
+		"block": Input.is_action_pressed("block") or _touch_block_held,
+		"dodge": dodge_pressed,
 	}
 
 
@@ -907,7 +1400,7 @@ func _collect_stress_bot_input() -> Dictionary:
 
 
 func _benchmark_enabled() -> bool:
-	return (
+	return OS.is_debug_build() and (
 		QA_BOT_BENCHMARK_ENABLED
 		or QA_STRESS_BENCHMARK_ENABLED
 		or QA_COMBAT_FUZZ_BENCHMARK_ENABLED
@@ -988,7 +1481,7 @@ func _print_benchmark_results() -> void:
 	print("")
 	print("========== ROLLBACK BENCHMARK RESULT ==========")
 	print("PlayerID: %d" % local_player_id)
-	print("Mode: %s" % ("ENet" if USE_ENET else "LatencyHarness"))
+	print("Mode: %s" % ("ENet" if _use_enet else "LatencyHarness"))
 	print("BenchmarkMode: %s" % _benchmark_mode_name())
 	print("DelayFrames: %d" % BENCHMARK_DELAY_FRAMES)
 	print("JitterFrames: %d" % BENCHMARK_JITTER_FRAMES)
@@ -1069,7 +1562,7 @@ func _print_benchmark_results() -> void:
 
 	if (
 		(QA_STRESS_BENCHMARK_ENABLED or QA_COMBAT_FUZZ_BENCHMARK_ENABLED)
-		and USE_ENET
+		and _use_enet
 		and transport != null
 	):
 		print("ForcedInputPacketsDropped: %d" % int(transport.get(
@@ -1394,6 +1887,8 @@ func _presentation_p95_abs_render_step() -> float:
 
 
 func _reset_presentation_measurement(print_confirmation: bool = true) -> void:
+	if not OS.is_debug_build():
+		return
 	var diagnostics: Dictionary = {}
 	if rollback_session != null:
 		diagnostics = rollback_session.get_diagnostics()
@@ -1602,6 +2097,8 @@ func _record_presentation_measurement(correction_was_active: bool) -> void:
 
 
 func _print_presentation_measurement_report() -> void:
+	if not OS.is_debug_build():
+		return
 	var diagnostics: Dictionary = {}
 	if rollback_session != null:
 		diagnostics = rollback_session.get_diagnostics()
@@ -1660,7 +2157,7 @@ func _print_presentation_measurement_report() -> void:
 
 
 func _draw_runtime_combat_boxes() -> void:
-	if not show_runtime_combat_boxes or _combat_box_overlay == null:
+	if not OS.is_debug_build() or not show_runtime_combat_boxes or _combat_box_overlay == null:
 		return
 
 	for fighter: PlayerState in [player_state, opponent_state]:
@@ -1679,12 +2176,30 @@ func _draw_runtime_combat_boxes() -> void:
 func _update_play_hud() -> void:
 	if play_status_label == null:
 		return
-	if USE_ENET and _match_config_handshake.failed:
-		play_status_label.text = "CONFIG MISMATCH"
+	if _host_start_button != null:
+		_host_start_button.visible = (
+			_use_enet
+			and _is_host
+			and _match_mode != "debug"
+			and _match_lifecycle == MatchLifecycle.READY
+			and rollback_session != null
+			and not bool(rollback_session.match_started)
+			and not _result_shown
+		)
+	if not _connection_failure_message.is_empty():
+		if _match_config_handshake.failed:
+			play_status_label.text = "Configuration mismatch.\nBoth players must use matching fighter/game versions.\nPress Main Menu to exit."
+		else:
+			play_status_label.text = "Connection failed.\nReturn to menu to try again."
 		return
 
 	if combat_system != null and combat_system.match_over:
-		play_status_label.text = "PLAYER %d WINS" % combat_system.winner_id
+		play_status_label.text = ""
+		_show_match_result()
+		return
+
+	if _single_player_mode:
+		play_status_label.text = "P1 vs CPU"
 		return
 
 	if rollback_session != null and bool(rollback_session.match_started):
@@ -1696,27 +2211,34 @@ func _update_play_hud() -> void:
 		return
 
 	if transport == null:
-		play_status_label.text = "STARTING NETWORK..."
+		play_status_label.text = "Starting network..."
 		return
 
-	if ENET_HOST:
+	if not _use_enet:
+		play_status_label.text = "Ready. Press Space to start."
+		return
+
+	if _is_host:
 		var remote_peer_id: int = int(transport.get("remote_peer_id"))
 		if remote_peer_id > 0:
-			play_status_label.text = (
-				"CONNECTED — PRESS SPACE TO START"
-				if _match_config_handshake.can_start_network_match()
-				else "CONNECTED — VERIFYING CONFIG"
-			)
+			if _match_config_handshake.can_start_network_match():
+				play_status_label.text = "Ready. Select Start Match."
+			elif not _fighter_selection_acknowledged:
+				play_status_label.text = "Player connected.\nConfirming fighter selection..."
+			else:
+				play_status_label.text = "Player connected.\nVerifying match configuration..."
 		else:
-			play_status_label.text = "WAITING FOR OPPONENT..."
+			play_status_label.text = "Hosting...\nWaiting for player..."
 	else:
 		var connected: bool = bool(transport.get("is_connected"))
 		if not connected:
-			play_status_label.text = "CONNECTING TO HOST..."
+			play_status_label.text = "Connecting..."
+		elif not _fighter_selection_received:
+			play_status_label.text = "Connected.\nWaiting for host fighter selection..."
 		elif not _match_config_handshake.can_start_network_match():
-			play_status_label.text = "CONNECTED — VERIFYING CONFIG"
+			play_status_label.text = "Verifying match configuration..."
 		else:
-			play_status_label.text = "CONNECTED — WAITING FOR HOST"
+			play_status_label.text = "Ready. Waiting for host to start..."
 
 
 func _update_camera(delta: float) -> void:
@@ -1767,6 +2289,8 @@ func _update_health_tint() -> void:
 
 
 func _update_rollback_debug_hud() -> void:
+	if not OS.is_debug_build():
+		return
 	if rollback_session == null:
 		return
 	var diagnostics: Dictionary = rollback_session.get_diagnostics()
@@ -1780,7 +2304,7 @@ func _update_rollback_debug_hud() -> void:
 		]
 
 	var mode_text := "ENet"
-	if not USE_ENET:
+	if not _use_enet:
 		mode_text = "LatencyHarness"
 
 	var connected := false
@@ -1857,6 +2381,8 @@ func _update_rollback_debug_hud() -> void:
 
 
 func _update_combat_debug_hud() -> void:
+	if not OS.is_debug_build():
+		return
 	if debug_input_label:
 		debug_input_label.text = "P1 block=%s active=%s hit=%s | P2 block=%s active=%s hit=%s" % [
 			str(player_state.blocking),
@@ -1880,6 +2406,8 @@ func _sprite_visual_debug(sprite: Node) -> Dictionary:
 
 
 func _update_visual_diagnostic_hud() -> void:
+	if not OS.is_debug_build():
+		return
 	if debug_pos_label == null:
 		return
 
@@ -2081,61 +2609,80 @@ func _on_start_match_received() -> void:
 		return
 
 	if bool(rollback_session.match_started):
-		print("[Arena] Duplicate start_match ignored.")
+		if OS.is_debug_build():
+			print("[Arena] Duplicate start_match ignored.")
 		return
-	if not _match_config_handshake.may_start_match(USE_ENET):
+	if not _match_config_handshake.may_start_match(_use_enet):
 		if _match_config_handshake.failed:
 			return
 		_pending_start_match_received = true
-		print("[Arena] START received before config verification; waiting.")
+		if OS.is_debug_build():
+			print("[Arena] START received before config verification; waiting.")
 		return
 
-	print("[Arena] start_match received. Starting rollback session.")
+	if OS.is_debug_build():
+		print("[Arena] start_match received. Starting rollback session.")
 	_clear_remote_render_correction()
 	_remote_render_correction_snap_count = 0
 	_remote_render_correction_smooth_count = 0
 	rollback_session.start_session()
+	_match_lifecycle = MatchLifecycle.PLAYING
+	_set_connection_status("Match started.\nPress Main Menu to exit.")
 	if _benchmark_enabled():
 		_start_benchmark_timer()
+	if _host_start_button != null:
+		_host_start_button.visible = false
+
+
+func _request_network_match_start() -> void:
+	if not _use_enet:
+		if rollback_session != null and not bool(rollback_session.match_started):
+			_on_start_match_received()
+		return
+	if transport == null or not transport.has_method("send_start_match"):
+		return
+	if not bool(transport.get("is_host")):
+		return
+	if rollback_session != null and bool(rollback_session.match_started):
+		return
+	if not _match_config_handshake.can_start_network_match():
+		return
+	transport.send_start_match()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		_return_to_main_menu()
+		get_viewport().set_input_as_handled()
+		return
+
 	if event is InputEventKey:
 		var key_event: InputEventKey = event
 		if key_event.pressed and not key_event.echo:
-			if key_event.keycode == KEY_F4 and _tuning_panel != null:
+			if key_event.keycode == KEY_ESCAPE:
+				_return_to_main_menu()
+				get_viewport().set_input_as_handled()
+				return
+			if OS.is_debug_build() and key_event.keycode == KEY_F4 and _tuning_panel != null:
 				_tuning_panel.call(
 					"set_panel_open",
 					not bool(_tuning_panel.visible)
 				)
 				get_viewport().set_input_as_handled()
 				return
-			if key_event.keycode == KEY_F2:
+			if OS.is_debug_build() and key_event.keycode == KEY_F2:
 				_reset_presentation_measurement()
 				get_viewport().set_input_as_handled()
 				return
-			if key_event.keycode == KEY_F3:
+			if OS.is_debug_build() and key_event.keycode == KEY_F3:
 				_print_presentation_measurement_report()
 				get_viewport().set_input_as_handled()
 				return
 
 	if event.is_action_pressed("ui_accept"):
-		if not USE_ENET:
-			if rollback_session != null and not bool(rollback_session.match_started):
-				_on_start_match_received()
-			get_viewport().set_input_as_handled()
-			return
-		if transport != null and transport.has_method("send_start_match"):
-			if not bool(transport.get("is_host")):
-				return
-
-			if rollback_session != null and bool(rollback_session.match_started):
-				return
-			if not _match_config_handshake.can_start_network_match():
-				if _match_config_handshake.failed:
-					return
-				print("[Arena] Waiting for config compatibility before START.")
-				return
-
-			print("[Arena] Host requesting start_match.")
-			transport.send_start_match()
+		if OS.is_debug_build() and _match_mode == "debug":
+			_request_network_match_start()
+		elif _host_start_button != null and _host_start_button.visible:
+			_request_network_match_start()
+		get_viewport().set_input_as_handled()
+		return

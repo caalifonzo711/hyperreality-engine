@@ -23,10 +23,11 @@ func bind_state(
 	_presentation = presentation
 	_dodge_total_frames = dodge_total_frames
 	_set_animation(_presentation.get_state_animation_id("idle"))
-	print("[PlayerSpriteDebug %s] bound to state id=%s" % [
-		debug_label,
-		str(_ps.get_instance_id()),
-	])
+	if OS.is_debug_build():
+		print("[PlayerSpriteDebug %s] bound to state id=%s" % [
+			debug_label,
+			str(_ps.get_instance_id()),
+		])
 
 
 func get_debug_visual_state() -> Dictionary:
@@ -195,7 +196,8 @@ func _set_animation(animation_id: String) -> void:
 	)
 	_t = 0.0
 	_frame = 0
-	print("[PlayerSpriteDebug %s] mode -> %s" % [debug_label, _animation_id])
+	if OS.is_debug_build():
+		print("[PlayerSpriteDebug %s] mode -> %s" % [debug_label, _animation_id])
 	_apply_frame()
 
 
@@ -210,8 +212,8 @@ func _apply_frame() -> void:
 	var frame_data: Dictionary = frames[idx]
 	var path: String = str(frame_data.get("sprite", ""))
 	var tex: Texture2D = _texture_cache.get(path) as Texture2D
-	if tex == null and ResourceLoader.exists(path):
-		tex = ResourceLoader.load(path) as Texture2D
+	if tex == null and _presentation != null:
+		tex = _presentation.get_texture(path)
 		if tex != null:
 			_texture_cache[path] = tex
 	if tex == null:

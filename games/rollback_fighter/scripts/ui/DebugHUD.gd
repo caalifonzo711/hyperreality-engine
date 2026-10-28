@@ -8,7 +8,7 @@ extends CanvasLayer
 var shown := false
 
 func _ready() -> void:
-	visible = shown
+	visible = OS.is_debug_build() and shown
 
 func set_tick(t: int) -> void:
 	if tick_l: tick_l.text = "Tick: %d" % t
@@ -23,6 +23,6 @@ func set_replay(msg: String) -> void:
 	if replay_l: replay_l.text = msg
 
 func _unhandled_input(e):
-	if e.is_action_pressed("ui_toggle_hud"):
+	if OS.is_debug_build() and e.is_action_pressed("ui_toggle_hud"):
 		shown = !shown
 		visible = shown

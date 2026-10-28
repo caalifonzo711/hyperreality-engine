@@ -3,6 +3,7 @@ class_name RollbackFighterPresentationDefinition
 
 
 var _data: Dictionary
+var _texture_cache: Dictionary = {}
 
 
 func _init(data: Dictionary) -> void:
@@ -51,3 +52,18 @@ func get_attack_phase_frames(animation_id: String, phase: String) -> Array[int]:
 
 func get_data() -> Dictionary:
 	return _data.duplicate(true)
+
+
+func get_texture(sprite_path: String) -> Texture2D:
+	if _texture_cache.has(sprite_path):
+		return _texture_cache[sprite_path] as Texture2D
+	var result: Texture2D = null
+	if sprite_path.begins_with("user://"):
+		var image: Image = Image.new()
+		if FileAccess.file_exists(sprite_path) and image.load(sprite_path) == OK and not image.is_empty():
+			result = ImageTexture.create_from_image(image)
+	else:
+		result = ResourceLoader.load(sprite_path) as Texture2D
+	if result != null:
+		_texture_cache[sprite_path] = result
+	return result

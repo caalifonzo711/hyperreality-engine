@@ -466,7 +466,7 @@ func _test_match_config_handshake(
 	)
 
 	var version_identity: Dictionary = local_identity.duplicate(true)
-	version_identity["protocol_version"] = 2
+	version_identity["protocol_version"] = RollbackFighterMatchConfigHandshake.PROTOCOL_VERSION + 1
 	var version_result: Dictionary = handshake.accept_remote_identity(
 		version_identity
 	)
@@ -482,7 +482,7 @@ func _test_match_config_handshake(
 		fighter_identity
 	)
 	_expect(
-		str(fighter_result["message"]).contains("Fighter ID mismatch"),
+		str(fighter_result["message"]).contains("Match slot ID mismatch"),
 		"fighter ID mismatch is diagnosed explicitly",
 		failures
 	)
@@ -746,7 +746,7 @@ func _test_mixed_fighter_definitions(
 	)
 	_expect(
 		not bool(reversed_result.get("ok", false))
-		and str(reversed_result.get("message", "")).contains("Fighter ID mismatch"),
+		and str(reversed_result.get("message", "")).contains("Match slot ID mismatch"),
 		"handshake rejects a different fighter assignment clearly",
 		failures
 	)

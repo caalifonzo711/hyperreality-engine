@@ -14,15 +14,18 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="ThirdTry"
-run/main_scene="res://games/rollback_fighter/scenes/FighterArena.tscn"
+config/name="Rollback Fighter"
+config/version="0.1.0"
+run/main_scene="res://games/rollback_fighter/scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.3", "Mobile")
 config/icon="res://icon.svg"
+display/window/handheld/orientation=0
 
 [autoload]
 
 RollbackNetplaySingleton="*res://addons/rollback_netplay_mvp/src/RollbackNetplay.gd"
-Gemini="*res://addons/gemini_integration/src/GeminiClient.gd"
+Gemini="*res://games/rollback_fighter/scripts/GeminiReleaseGate.gd"
+NetworkLaunchConfig="*res://games/rollback_fighter/scripts/net/NetworkLaunchConfig.gd"
 
 [editor_plugins]
 

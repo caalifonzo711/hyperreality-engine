@@ -88,8 +88,8 @@ script = ExtResource("3_ggfo4")
 offset_left = 100.0
 offset_top = 20.0
 offset_right = 700.0
-offset_bottom = 52.0
-theme_override_font_sizes/font_size = 24
+offset_bottom = 66.0
+theme_override_font_sizes/font_size = 20
 text = "WAITING FOR OPPONENT..."
 horizontal_alignment = 1
 
