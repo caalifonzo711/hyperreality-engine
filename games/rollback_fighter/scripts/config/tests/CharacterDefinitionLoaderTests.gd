@@ -29,6 +29,7 @@ const CHARACTER_PATH := "res://games/rollback_fighter/characters/example_fighter
 const ALT_CHARACTER_PATH := "res://games/rollback_fighter/characters/example_fighter_alt/character.json"
 const PRESENTATION_PATH := "res://games/rollback_fighter/characters/example_fighter/presentation.json"
 const CHARACTER_ROOT := "res://games/rollback_fighter/characters/example_fighter"
+const ALT_CHARACTER_ROOT := "res://games/rollback_fighter/characters/example_fighter_alt"
 const EXPECTED_CANONICAL_BYTE_LENGTH := 735
 const EXPECTED_AUTH_DIGEST := \
 	"2cc92852ed7d9e0a7217209b2e31c129205e74bbe5efe5571619207afb55e23b"
@@ -113,6 +114,11 @@ func _initialize() -> void:
 			first_bytes,
 			failures
 		)
+		_test_desktop_attack_input_routing(
+			rules_result["definition"],
+			first_result["definition"],
+			failures
+		)
 		_test_match_config_handshake(
 			writer,
 			rules_result["definition"],
@@ -126,6 +132,7 @@ func _initialize() -> void:
 			failures
 		)
 		if bool(alt_result.get("ok", false)):
+			_test_alt_heavy_presentation(alt_result["definition"], failures)
 			_test_mixed_fighter_definitions(
 				writer,
 				rules_result["definition"],
@@ -148,6 +155,80 @@ func _initialize() -> void:
 	for failure in failures:
 		printerr("[CharacterDefinitionTests] FAIL: %s" % failure)
 	quit(1)
+
+
+func _test_alt_heavy_presentation(
+	character_definition: RollbackFighterCharacterDefinition,
+	failures: PackedStringArray
+) -> void:
+	var presentation: RollbackFighterPresentationDefinition = character_definition.get_presentation()
+	var jab_frames: Array = presentation.get_animation("jab").get("frames", [])
+	var heavy_frames: Array = presentation.get_animation("heavy").get("frames", [])
+	_expect(
+		jab_frames.size() == 2
+		and str(jab_frames[0].get("sprite", "")) == "%s/sprites/jab_0.png" % ALT_CHARACTER_ROOT
+		and str(jab_frames[1].get("sprite", "")) == "%s/sprites/jab_1.png" % ALT_CHARACTER_ROOT,
+		"alternate fighter jab presentation remains on jab_0/jab_1",
+		failures
+	)
+	_expect(
+		heavy_frames.size() == 2
+		and str(heavy_frames[0].get("sprite", "")) == "%s/sprites/hero_power1.png" % ALT_CHARACTER_ROOT
+		and str(heavy_frames[1].get("sprite", "")) == "%s/sprites/hero_power2.png" % ALT_CHARACTER_ROOT
+		and presentation.get_attack_phase_frames("heavy", "startup") == [0]
+		and presentation.get_attack_phase_frames("heavy", "active") == [1]
+		and presentation.get_attack_phase_frames("heavy", "recovery") == [1],
+		"alternate fighter heavy presentation uses power1 for startup and power2 for active/recovery",
+		failures
+	)
+
+
+func _test_desktop_attack_input_routing(
+	rules_definition: RollbackFighterGameRulesDefinition,
+	character_definition: RollbackFighterCharacterDefinition,
+	failures: PackedStringArray
+) -> void:
+	var logical_k: InputEventKey = InputEventKey.new()
+	logical_k.keycode = KEY_K
+	var physical_j: InputEventKey = InputEventKey.new()
+	physical_j.physical_keycode = KEY_J
+	_expect(
+		InputMap.event_is_action(logical_k, "heavy_attack"),
+		"desktop logical K maps to heavy_attack",
+		failures
+	)
+	_expect(
+		InputMap.event_is_action(physical_j, "jab"),
+		"desktop physical J remains mapped to jab",
+		failures
+	)
+	var p1: PlayerState = PlayerStateScript.new()
+	var p2: PlayerState = PlayerStateScript.new()
+	var combat: CombatSystem = CombatSystemScript.new()
+	var adapter: FighterRollbackAdapter = AdapterScript.new()
+	p1.configure_character_definition(character_definition)
+	p2.configure_character_definition(character_definition)
+	combat.p1_state = p1
+	combat.p2_state = p2
+	combat.configure_character_definitions(
+		character_definition,
+		character_definition,
+		rules_definition
+	)
+	adapter.setup(p1, p2, null, null, combat, rules_definition)
+	var heavy_input: Dictionary = adapter.neutral_input()
+	heavy_input["atk_h"] = true
+	adapter.simulate(heavy_input, adapter.neutral_input(), 1.0 / 60.0)
+	_expect(
+		p1.state == PlayerState.MoveState.STARTUP
+		and p1.attack_kind == PlayerState.AttackKind.HEAVY,
+		"encoded heavy input starts the heavy attack state",
+		failures
+	)
+	adapter.free()
+	combat.free()
+	p1.free()
+	p2.free()
 
 
 func _test_fractional_number(loader, failures: PackedStringArray) -> void:

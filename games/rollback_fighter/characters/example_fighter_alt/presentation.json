@@ -23,8 +23,8 @@
       "playback": "attack_phase_map",
       "fps_milli": 10000,
       "frames": [
-        { "sprite": "sprites/jab_0.png", "feet_anchor": { "x": 646, "y": 589 }, "scale_milli": 108 },
-        { "sprite": "sprites/jab_1.png", "feet_anchor": { "x": 647, "y": 589 }, "scale_milli": 108 }
+        { "sprite": "sprites/hero_power1.png", "feet_anchor": { "x": 646, "y": 588 }, "scale_milli": 108 },
+        { "sprite": "sprites/hero_power2.png", "feet_anchor": { "x": 647, "y": 588 }, "scale_milli": 108 }
       ]
     },
     "block": {
@@ -73,7 +73,7 @@
     "heavy": {
       "startup": [0],
       "active": [1],
-      "recovery": [0]
+      "recovery": [1]
     }
   }
 }
