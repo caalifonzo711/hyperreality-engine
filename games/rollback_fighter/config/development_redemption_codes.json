@@ -1,0 +1,22 @@
+{
+  "config_version": 1,
+  "prototype_notice": "Local development codes are not secure production credentials.",
+  "codes": [
+    {
+      "code": "HYPER-ALT-001",
+      "product_id": "skin.example_fighter_alt.001"
+    },
+    {
+      "code": "HYPER-ALT-002",
+      "product_id": "skin.example_fighter_alt.001"
+    },
+    {
+      "code": "HYPER-ALT-003",
+      "product_id": "skin.example_fighter_alt.001"
+    },
+    {
+      "code": "HYPER-UNKNOWN-001",
+      "product_id": "skin.prototype_missing.001"
+    }
+  ]
+}

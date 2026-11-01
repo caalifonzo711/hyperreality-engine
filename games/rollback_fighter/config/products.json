@@ -1,0 +1,12 @@
+{
+  "config_version": 1,
+  "products": [
+    {
+      "product_id": "skin.example_fighter_alt.001",
+      "display_name": "Example Fighter Alt Skin",
+      "product_type": "skin",
+      "content_id": "example_fighter_alt",
+      "display_price": "$1.00"
+    }
+  ]
+}
