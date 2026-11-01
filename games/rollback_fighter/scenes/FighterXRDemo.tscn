@@ -1,0 +1,50 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://games/rollback_fighter/scripts/xr/FighterXRDemo.gd" id="1_xr_demo"]
+[ext_resource type="PackedScene" path="res://games/rollback_fighter/scenes/FighterArena.tscn" id="2_arena"]
+
+[sub_resource type="Environment" id="Environment_xr_demo"]
+background_mode = 1
+background_color = Color(0.035, 0.045, 0.06, 0)
+
+[sub_resource type="QuadMesh" id="QuadMesh_match"]
+size = Vector2(1.8, 1.0125)
+
+[node name="FighterXRDemo" type="Node3D"]
+script = ExtResource("1_xr_demo")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_xr_demo")
+
+[node name="XROrigin3D" type="XROrigin3D" parent="."]
+
+[node name="XRCamera3D" type="XRCamera3D" parent="XROrigin3D"]
+
+[node name="DesktopCamera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+current = true
+
+[node name="FighterStage" type="Node3D" parent="."]
+
+[node name="MatchViewport" type="SubViewport" parent="FighterStage"]
+transparent_bg = true
+disable_3d = true
+size = Vector2i(800, 450)
+render_target_v_flip = true
+render_target_update_mode = 4
+
+[node name="FighterArena" parent="FighterStage/MatchViewport" instance=ExtResource("2_arena")]
+
+[node name="MatchDisplay" type="MeshInstance3D" parent="FighterStage"]
+mesh = SubResource("QuadMesh_match")
+
+[node name="DebugOverlay" type="CanvasLayer" parent="."]
+
+[node name="PresentationLabel" type="Label" parent="DebugOverlay"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 650.0
+offset_bottom = 205.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+text = "XR Presentation\nXR Mode: Desktop fallback\nPassthrough: N/A\nStage: World anchored\nDistance: 2.00m\nHeight: -0.45m\nScale: 1.00x\nR Recenter | [ ] Distance | PgUp/PgDn Height | -/+ Scale | 0 Reset | P Passthrough"
