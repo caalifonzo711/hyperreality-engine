@@ -2,12 +2,8 @@ extends Node2D
 
 # ArenaScene.gd — ENet rollback fighter arena + deterministic QA bot benchmark
 
-# Direct FighterArena scene runs (e.g. editor F6) retain explicit debug defaults.
-# Normal product startup always supplies a one-shot NetworkLaunchConfig from MainMenu.
-const DEBUG_DIRECT_RUN_USE_ENET := true
-const DEBUG_DIRECT_RUN_ENET_HOST := true
-const DEBUG_DIRECT_RUN_ENET_IP := "127.0.0.1"
-const DEBUG_DIRECT_RUN_ENET_PORT := 7777
+const DEFAULT_ENET_IP := "127.0.0.1"
+const DEFAULT_ENET_PORT := 7777
 
 # -------------------------------------------------
 # Benchmark config
@@ -76,6 +72,16 @@ const MatchConfigHandshakeScript = preload(
 const SimpleFighterCPUScript = preload(
 	"res://games/rollback_fighter/scripts/ai/SimpleFighterCPU.gd"
 )
+const ProjectPresentationRuntimeScript = preload(
+	"res://games/rollback_fighter/scripts/projects/ProjectPresentationRuntime.gd"
+)
+const ProjectPresentationResolverScript = preload(
+	"res://games/rollback_fighter/scripts/projects/ProjectPresentationResolver.gd"
+)
+const ProjectMultiplayerIdentityScript = preload(
+	"res://games/rollback_fighter/scripts/projects/GameProjectMultiplayerIdentity.gd"
+)
+const PROJECT_DETAIL_SCENE_PATH := "res://games/rollback_fighter/scenes/ProjectDetail.tscn"
 const SINGLE_PLAYER_PHYS_DT := 1.0 / 60.0
 
 const CHARACTER_REGISTRY_PATH := \
@@ -102,8 +108,8 @@ var _remote_config_identity_received: bool = false
 var _pending_start_match_received: bool = false
 var _use_enet: bool = true
 var _is_host: bool = true
-var _enet_address: String = DEBUG_DIRECT_RUN_ENET_IP
-var _enet_port: int = DEBUG_DIRECT_RUN_ENET_PORT
+var _enet_address: String = DEFAULT_ENET_IP
+var _enet_port: int = DEFAULT_ENET_PORT
 var _connection_failure_message: String = ""
 var _return_menu_button: Button = null
 var _host_start_button: Button = null
@@ -129,6 +135,10 @@ var _fighter_selection_acknowledged: bool = false
 var _result_overlay: Control = null
 var _result_title: Label = null
 var _result_shown: bool = false
+var _project_presentation_runtime: RollbackFighterProjectPresentationRuntime = null
+var _local_project_identity: Dictionary = {}
+var _project_identity_sent: bool = false
+var _project_response_received: bool = false
 
 var benchmark_running: bool = false
 var benchmark_complete: bool = false
@@ -224,6 +234,7 @@ func _ready() -> void:
 	if OS.is_debug_build():
 		print("[Arena] _ready")
 	_configure_network_launch()
+	_setup_project_presentation()
 	_create_return_menu_button()
 	_create_host_start_button()
 	_create_result_overlay()
@@ -468,6 +479,14 @@ func _load_authoritative_fighter_definitions() -> bool:
 	_match_config_handshake.local_identity = (
 		_local_match_config_identity.duplicate(true)
 	)
+	if _is_host and _match_config_handshake.project_required:
+		var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+		var project_id := str(project_context.call("get_project_id")) if project_context != null else ""
+		var project_identity_result := ProjectMultiplayerIdentityScript.new().build(project_id, true)
+		if not bool(project_identity_result.get("ok", false)):
+			_connection_failure_message = str(project_identity_result.get("message", "Project changed — rebuild before hosting."))
+			return false
+		_local_project_identity = project_identity_result["identity"]
 	var canonical_byte_length: int = int(
 		_local_match_config_identity["canonical_byte_length"]
 	)
@@ -532,8 +551,12 @@ func _load_authoritative_fighter_definitions() -> bool:
 func _on_transport_connected() -> void:
 	_connection_failure_message = ""
 	if _is_host and int(transport.get("remote_peer_id")) > 0:
-		_set_connection_status("Player connected.\nSending fighter selection...")
-		_send_host_fighter_selection()
+		if _match_config_handshake.project_required:
+			_set_connection_status("Player connected.\nVerifying game project...")
+			_send_host_project_identity()
+		else:
+			_set_connection_status("Player connected.\nSending fighter selection...")
+			_send_host_fighter_selection()
 	elif not _is_host:
 		_set_connection_status("Connected.\nWaiting for host fighter selection...")
 
@@ -577,6 +600,9 @@ func _configure_network_launch() -> void:
 		_match_mode = mode
 		_enet_address = str(launch.get("address", ""))
 		_enet_port = int(launch.get("port", 0))
+		var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+		var project_network_match := project_context != null and bool(project_context.call("is_network_project"))
+		_match_config_handshake.set_project_verification(project_network_match, false)
 		if _enet_port < 1 or _enet_port > 65535 or (not _is_host and _enet_address.is_empty()):
 			_connection_failure_message = "Invalid network launch settings."
 			_use_enet = false
@@ -590,20 +616,19 @@ func _configure_network_launch() -> void:
 	_match_mode = "debug"
 	_p1_fighter_id = P1_FIGHTER_ID
 	_p2_fighter_id = P2_FIGHTER_ID
-	if not OS.is_debug_build():
-		_connection_failure_message = "Please launch from the Main Menu."
-		_use_enet = false
-		return
-	_use_enet = DEBUG_DIRECT_RUN_USE_ENET
-	_is_host = DEBUG_DIRECT_RUN_ENET_HOST
-	_enet_address = DEBUG_DIRECT_RUN_ENET_IP
-	_enet_port = DEBUG_DIRECT_RUN_ENET_PORT
-	if _use_enet:
-		_set_connection_status(
-			"Hosting on port %d\nWaiting for player..." % _enet_port
-			if _is_host
-			else "Connecting to %s:%d..." % [_enet_address, _enet_port]
-		)
+	# Running FighterArena.tscn directly is the legacy/default local game. Project
+	# context is optional and must never be inherited by an unrelated direct run.
+	var creator_context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	if creator_context != null:
+		creator_context.call("launch_global")
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	if project_context != null:
+		project_context.call("clear")
+	_match_mode = "single_player"
+	_single_player_mode = true
+	_use_enet = false
+	_is_host = false
+	_set_connection_status("P1 vs CPU")
 
 
 func _connect_transport_signals() -> void:
@@ -621,6 +646,10 @@ func _connect_transport_signals() -> void:
 		transport.match_selection_received.connect(_on_match_selection_received)
 	if transport.has_signal("match_selection_ack_received") and not transport.match_selection_ack_received.is_connected(_on_match_selection_ack_received):
 		transport.match_selection_ack_received.connect(_on_match_selection_ack_received)
+	if transport.has_signal("project_config_received") and not transport.project_config_received.is_connected(_on_project_config_received):
+		transport.project_config_received.connect(_on_project_config_received)
+	if transport.has_signal("project_config_response_received") and not transport.project_config_response_received.is_connected(_on_project_config_response):
+		transport.project_config_response_received.connect(_on_project_config_response)
 	if transport.has_signal("start_match_received") and not transport.start_match_received.is_connected(_on_start_match_received):
 		transport.start_match_received.connect(_on_start_match_received)
 
@@ -630,7 +659,7 @@ func _create_return_menu_button() -> void:
 		return
 	_return_menu_button = Button.new()
 	_return_menu_button.name = "ReturnToMenuButton"
-	_return_menu_button.text = "Main Menu"
+	_return_menu_button.text = "Back to Project" if _has_project_launch() else "Main Menu"
 	_return_menu_button.custom_minimum_size = Vector2(120.0, 48.0)
 	_return_menu_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_return_menu_button.offset_left = -136.0
@@ -763,7 +792,7 @@ func _create_result_overlay() -> void:
 	rematch_button.pressed.connect(_on_rematch_pressed)
 	content.add_child(rematch_button)
 	var menu_button: Button = Button.new()
-	menu_button.text = "Main Menu"
+	menu_button.text = "Back to Project" if _has_project_launch() else "Main Menu"
 	menu_button.custom_minimum_size.y = 52.0
 	menu_button.pressed.connect(_return_to_main_menu)
 	content.add_child(menu_button)
@@ -825,7 +854,16 @@ func _return_to_main_menu() -> void:
 		launch_config.call("clear")
 	if transport != null and transport.has_method("shutdown"):
 		transport.call("shutdown")
-	get_tree().change_scene_to_file("res://games/rollback_fighter/scenes/MainMenu.tscn")
+	get_tree().change_scene_to_file(
+		PROJECT_DETAIL_SCENE_PATH
+		if _has_project_launch()
+		else "res://games/rollback_fighter/scenes/MainMenu.tscn"
+	)
+
+
+func _has_project_launch() -> bool:
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	return project_context != null and bool(project_context.call("is_project_match"))
 
 
 func _notification(what: int) -> void:
@@ -835,6 +873,8 @@ func _notification(what: int) -> void:
 
 func _begin_config_handshake() -> void:
 	if not _use_enet or transport == null or _config_handshake_sent:
+		return
+	if _match_config_handshake.project_required and not _match_config_handshake.project_verified:
 		return
 	if _match_mode in ["host", "client", "debug"] and not _fighter_selection_exchange_complete():
 		return
@@ -858,6 +898,8 @@ func _fighter_selection_exchange_complete() -> bool:
 func _send_host_fighter_selection() -> void:
 	if not _is_host or _fighter_selection_sent or transport == null:
 		return
+	if _match_config_handshake.project_required and not _match_config_handshake.project_verified:
+		return
 	if not transport.has_method("send_match_selection"):
 		_fail_config_handshake("Transport does not support fighter selection.")
 		return
@@ -880,6 +922,15 @@ func _on_match_selection_received(p1_id: String, p2_id: String) -> void:
 	if not _apply_fighter_selection(p1_id, p2_id):
 		_fail_config_handshake("Fighter not installed on both devices.")
 		return
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	if project_context != null and bool(project_context.call("is_network_project")):
+		var roster: Array[String] = project_context.call("get_fighter_ids")
+		if p1_id not in roster or p2_id not in roster:
+			_fail_config_handshake("Host selected a fighter outside the verified project roster.")
+			return
+		if not bool(project_context.call("set_fighter_selection", p1_id, p2_id)):
+			_fail_config_handshake("Could not preserve the verified project fighter assignments.")
+			return
 	_fighter_selection_received = true
 	if transport != null and transport.has_method("send_match_selection_ack"):
 		if not bool(transport.call("send_match_selection_ack", p1_id, p2_id)):
@@ -900,6 +951,78 @@ func _on_match_selection_ack_received(p1_id: String, p2_id: String) -> void:
 	if OS.is_debug_build():
 		print("[Arena] Client acknowledged fighter selection.")
 	_begin_config_handshake()
+
+
+func _send_host_project_identity() -> void:
+	if not _is_host or _project_identity_sent or transport == null:
+		return
+	if _local_project_identity.is_empty() or not transport.has_method("send_project_config"):
+		_fail_config_handshake("Project identity is unavailable.")
+		return
+	if not bool(transport.call("send_project_config", _local_project_identity)):
+		return
+	_project_identity_sent = true
+	if OS.is_debug_build():
+		print("[ProjectHandshake] project identity sent")
+
+
+func _on_project_config_received(identity: Dictionary) -> void:
+	if _is_host or _match_config_handshake.failed:
+		return
+	_match_config_handshake.set_project_verification(true, false)
+	var verification := ProjectMultiplayerIdentityScript.new().verify_remote(identity)
+	var accepted := bool(verification.get("ok", false))
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	if accepted and (project_context == null or not bool(project_context.call("begin_network", str(identity["project_id"]), false))):
+		accepted = false
+		verification = {
+			"ok": false,
+			"code": "PROJECT_MISMATCH",
+			"message": "Game project version/configuration mismatch",
+		}
+	var response := {
+		"accepted": accepted,
+		"code": str(verification.get("code", "")),
+		"message": str(verification.get("message", "PROJECT CONFIG VERIFIED")),
+		"project_id": str(identity.get("project_id", "")),
+		"digest": str(identity.get("digest", "")),
+	}
+	if transport == null or not transport.has_method("send_project_config_response") or not bool(transport.call("send_project_config_response", response)):
+		_fail_config_handshake("Could not acknowledge game project verification.")
+		return
+	if not accepted:
+		_fail_config_handshake(str(response["message"]))
+		return
+	var creator_context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	if creator_context != null:
+		creator_context.call("launch_for_project", str(identity["project_id"]))
+	_match_config_handshake.project_verified = true
+	_local_project_identity = verification["identity"]
+	if _project_presentation_runtime == null:
+		_setup_project_presentation()
+	_set_connection_status("PROJECT CONFIG VERIFIED\nWaiting for fighter selection...")
+	if OS.is_debug_build():
+		print("[ProjectHandshake] PROJECT CONFIG VERIFIED")
+
+
+func _on_project_config_response(response: Dictionary) -> void:
+	if not _is_host or _project_response_received or _match_config_handshake.failed:
+		return
+	_project_response_received = true
+	if not bool(response.get("accepted", false)):
+		_fail_config_handshake(str(response.get("message", "Game project version/configuration mismatch")))
+		return
+	if (
+		str(response.get("project_id", "")) != str(_local_project_identity.get("project_id", ""))
+		or str(response.get("digest", "")) != str(_local_project_identity.get("digest", ""))
+	):
+		_fail_config_handshake("Game project version/configuration mismatch")
+		return
+	_match_config_handshake.project_verified = true
+	_set_connection_status("PROJECT CONFIG VERIFIED\nSending fighter selection...")
+	if OS.is_debug_build():
+		print("[ProjectHandshake] PROJECT CONFIG VERIFIED")
+	_send_host_fighter_selection()
 
 
 func _apply_fighter_selection(p1_id: String, p2_id: String) -> bool:
@@ -995,12 +1118,21 @@ func _fail_config_handshake(message: String) -> void:
 		]
 	)
 	push_error(diagnostic if OS.is_debug_build() else "Configuration mismatch. Both players must use matching fighter/game versions.")
-	_connection_failure_message = "Configuration mismatch"
-	_set_connection_status(
-		"Fighter not installed on both devices.\nPress Main Menu to exit."
-		if message.contains("Fighter not installed")
-		else "Configuration mismatch.\nBoth players must use matching fighter/game versions.\nPress Main Menu to exit."
-	)
+	_connection_failure_message = message
+	_set_connection_status(_handshake_failure_status())
+
+
+func _handshake_failure_status() -> String:
+	var message := _match_config_handshake.failure_message
+	if message.contains("Game project not installed"):
+		return "Game project not installed.\nPress Main Menu to exit."
+	if message.contains("Game project version/configuration mismatch"):
+		return "Game project version/configuration mismatch.\nPress Main Menu to exit."
+	if message.contains("Project changed"):
+		return "Project changed — rebuild before hosting.\nPress Main Menu to exit."
+	if message.contains("Fighter not installed"):
+		return "Fighter not installed on both devices.\nPress Main Menu to exit."
+	return "Configuration mismatch.\nBoth players must use matching fighter/game versions.\nPress Main Menu to exit."
 
 
 func _print_presentation_summary(
@@ -1165,6 +1297,7 @@ func _physics_process(delta: float) -> void:
 		_update_health_tint()
 		_update_combat_debug_hud()
 		_update_rollback_debug_hud()
+		_observe_project_presentation()
 		return
 
 	if rollback_session and not bool(rollback_session.match_started):
@@ -1208,6 +1341,39 @@ func _physics_process(delta: float) -> void:
 	_update_health_tint()
 	_update_combat_debug_hud()
 	_update_rollback_debug_hud()
+	_observe_project_presentation()
+
+
+func _setup_project_presentation() -> void:
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	if project_context != null and bool(project_context.call("is_project_match")):
+		_project_presentation_runtime = ProjectPresentationRuntimeScript.new()
+		_project_presentation_runtime.name = "ProjectPresentationRuntime"
+		add_child(_project_presentation_runtime)
+		var project_id := str(project_context.call("get_project_id"))
+		_project_presentation_runtime.configure(
+			self,
+			ProjectPresentationResolverScript.new().resolve(project_id)
+		)
+		return
+	# A joining client does not know the host project until the project handshake.
+	# Leave the built-in Arena presentation untouched until that identity verifies.
+	if _use_enet and not _is_host:
+		return
+	var context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	if context == null:
+		return
+	_project_presentation_runtime = ProjectPresentationRuntimeScript.new()
+	_project_presentation_runtime.name = "ProjectPresentationRuntime"
+	add_child(_project_presentation_runtime)
+	_project_presentation_runtime.configure(self, context.call("get_runtime_presentation"))
+
+
+func _observe_project_presentation() -> void:
+	if _project_presentation_runtime == null or combat_system == null:
+		return
+	var active := _single_player_started if _single_player_mode else (rollback_session != null and bool(rollback_session.match_started))
+	_project_presentation_runtime.observe(player_state, opponent_state, active, combat_system.match_over)
 
 
 func _on_frame_pre_draw() -> void:
@@ -2188,7 +2354,7 @@ func _update_play_hud() -> void:
 		)
 	if not _connection_failure_message.is_empty():
 		if _match_config_handshake.failed:
-			play_status_label.text = "Configuration mismatch.\nBoth players must use matching fighter/game versions.\nPress Main Menu to exit."
+			play_status_label.text = _handshake_failure_status()
 		else:
 			play_status_label.text = "Connection failed.\nReturn to menu to try again."
 		return

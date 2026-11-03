@@ -2,6 +2,7 @@ extends Control
 
 const MAIN_MENU_SCENE_PATH := "res://games/rollback_fighter/scenes/MainMenu.tscn"
 const FIGHTER_ARENA_SCENE_PATH := "res://games/rollback_fighter/scenes/FighterArena.tscn"
+const PROJECT_DETAIL_SCENE_PATH := "res://games/rollback_fighter/scenes/ProjectDetail.tscn"
 const CHARACTER_REGISTRY_PATH := "res://games/rollback_fighter/config/builtin_fighters.json"
 const TEST_PRODUCT_ID := "skin.example_fighter_alt.001"
 const FighterProviderScript = preload(
@@ -77,6 +78,10 @@ func _ready() -> void:
 	else:
 		_mode_label.text = "Single Player" if _mode == "single_player" else "Host Multiplayer"
 		_start_button.text = "Start Match"
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	if project_context != null and bool(project_context.call("is_project_match")):
+		var project_launch: Dictionary = project_context.call("get_context")
+		_mode_label.text = "%s — %s" % [str(project_launch.get("display_name", "Custom Game")), _mode.replace("_", " ").capitalize()]
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -227,7 +232,14 @@ func _load_registered_fighters() -> bool:
 	var provider: RollbackFighterImportedFighterProvider = FighterProviderScript.new()
 	_fighter_ids.clear()
 	_fighters.clear()
-	for fighter_entry: Dictionary in provider.list_fighters():
+	var entries: Array[Dictionary] = []
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	if project_context != null and bool(project_context.call("is_project_match")):
+		var project_ids: Array[String] = project_context.call("get_fighter_ids")
+		entries = provider.list_fighters_for_ids(project_ids)
+	else:
+		entries = provider.list_fighters()
+	for fighter_entry: Dictionary in entries:
 		var fighter_id: String = str(fighter_entry.get("id", ""))
 		var definition_value: Variant = fighter_entry.get("definition")
 		if fighter_id.is_empty() or not definition_value is RollbackFighterCharacterDefinition:
@@ -334,6 +346,11 @@ func _on_start_pressed() -> void:
 	if not bool(_launch_config.call("set_fighter_selection", p1_id, p2_id)):
 		_set_error("Select two valid registered fighters.")
 		return
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	if project_context != null and bool(project_context.call("is_project_match")):
+		if not bool(project_context.call("set_fighter_selection", p1_id, p2_id)):
+			_set_error("Selected fighters are outside this project's roster.")
+			return
 	var error: Error = get_tree().change_scene_to_file(FIGHTER_ARENA_SCENE_PATH)
 	if error != OK:
 		_set_error("Could not open FighterArena.")
@@ -471,7 +488,9 @@ func _on_back_pressed() -> void:
 	_leaving = true
 	if _launch_config != null:
 		_launch_config.call("clear")
-	get_tree().change_scene_to_file(MAIN_MENU_SCENE_PATH)
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	var target := PROJECT_DETAIL_SCENE_PATH if project_context != null and bool(project_context.call("is_project_match")) else MAIN_MENU_SCENE_PATH
+	get_tree().change_scene_to_file(target)
 
 
 func _set_error(message: String) -> void:

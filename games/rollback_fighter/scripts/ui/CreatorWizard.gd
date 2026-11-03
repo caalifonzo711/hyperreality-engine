@@ -2,6 +2,7 @@ extends Control
 
 
 const MAIN_MENU_PATH := "res://games/rollback_fighter/scenes/MainMenu.tscn"
+const PROJECT_DETAIL_PATH := "res://games/rollback_fighter/scenes/ProjectDetail.tscn"
 const DraftScript = preload("res://games/rollback_fighter/scripts/config/CreatorFighterDraft.gd")
 const ArtImporter = preload("res://games/rollback_fighter/scripts/config/CreatorArtImporter.gd")
 const AlignmentDraftScript = preload("res://games/rollback_fighter/scripts/config/CreatorPresentationDraft.gd")
@@ -35,6 +36,14 @@ var _feel_value_label: Label
 
 func _ready() -> void:
 	_draft = DraftScript.new()
+	var context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	if context != null:
+		_draft.set_project_context(str(context.call("get_project_id")))
+		var presentation_config: Dictionary = context.call("get_presentation_config")
+		_draft.set_presentation_policy(
+			str(presentation_config.get("style_preset", "platform_fighter")),
+			str(presentation_config.get("presentation_policy_reference", ""))
+		)
 	_alignment_draft = AlignmentDraftScript.new()
 	_build_ui()
 	_render_page()
@@ -197,25 +206,30 @@ func _render_feel_page() -> void:
 
 func _render_art_page() -> void:
 	var intro: Label = Label.new()
-	intro.text = "Required art matches the built-in fighter's minimum presentation: 9 drawings total. Additional drawings are optional. Simulation frames are not PNG counts; an 8-frame startup can use one image. Heavy uses light art unless you add optional heavy drawings."
+	intro.text = "%s\nSimulation frames are not PNG counts; an 8-frame startup can use one drawing." % str(_draft.slot_manifest.get("help_text", "Add the required fighter drawings."))
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_page_container.add_child(intro)
 	_art_progress_label = Label.new()
 	_art_progress_label.add_theme_font_size_override("font_size", 18)
 	_page_container.add_child(_art_progress_label)
 	var animations: Dictionary = _draft.slot_manifest.get("animations", {})
-	for animation_id in ANIMATION_ORDER:
+	var group_metadata: Dictionary = _draft.slot_manifest.get("group_metadata", {})
+	var group_order: Array = Array(_draft.slot_manifest.get("group_order", ANIMATION_ORDER))
+	for animation_id_value in group_order:
+		var animation_id: String = str(animation_id_value)
 		if not animations.has(animation_id):
 			continue
+		var metadata: Dictionary = group_metadata.get(animation_id, {})
 		var heading: Label = Label.new()
-		heading.text = _animation_title(animation_id)
+		heading.text = str(metadata.get("display_name", _animation_title(animation_id))).to_upper()
 		heading.add_theme_font_size_override("font_size", 18)
 		_page_container.add_child(heading)
-		if animation_id == "heavy":
-			var fallback_note: Label = Label.new()
-			fallback_note.text = "Heavy-specific art is optional. If omitted, heavy mirrors your light-attack art."
-			fallback_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			_page_container.add_child(fallback_note)
+		var group_help: String = str(metadata.get("help_text", ""))
+		if not group_help.is_empty():
+			var help_label: Label = Label.new()
+			help_label.text = "%s  Recommended drawings: %d." % [group_help, int(metadata.get("recommended_drawing_count", 0))]
+			help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_page_container.add_child(help_label)
 		var value: Variant = animations[animation_id]
 		if value is Array:
 			_add_slot_cards(animation_id, "pose", value)
@@ -251,7 +265,7 @@ func _add_slot_cards(animation_id: String, phase: String, slots: Array) -> void:
 		content.add_theme_constant_override("separation", 5)
 		card.add_child(content)
 		var title: Label = Label.new()
-		title.text = _slot_title(slot_id)
+		title.text = str(slot.get("display_name", _slot_title(slot_id)))
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		content.add_child(title)
 		var required: bool = bool(slot.get("required", false))
@@ -382,13 +396,20 @@ func _on_build_pressed() -> void:
 			for detail in result.get("errors", []):
 				push_warning("[CreatorBuild] %s" % str(detail))
 		return
+	var context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	if context != null:
+		var project_result: Dictionary = context.call("record_successful_build", _draft.fighter_id)
+		if not bool(project_result.get("ok", false)):
+			_status_label.text = "Fighter built, but its project roster could not be updated."
+			return
 	_status_label.text = "%s built and ready to play." % _draft.fighter_name
 	_create_button.disabled = true
 	_build_button.disabled = true
 	var play_button: Button = _make_button("Play Fighter")
 	play_button.pressed.connect(_on_play_built_fighter_pressed)
 	_page_container.add_child(play_button)
-	var menu_button: Button = _make_button("Return to Main Menu")
+	var project_context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	var menu_button: Button = _make_button("Return to Project" if project_context != null and bool(project_context.call("has_project")) else "Return to Main Menu")
 	menu_button.pressed.connect(_on_cancel_pressed)
 	_page_container.add_child(menu_button)
 	print("[CreatorBuild] playable fighter built id=%s" % _draft.fighter_id)
@@ -507,7 +528,8 @@ func _on_create_pressed() -> void:
 
 
 func _on_cancel_pressed() -> void:
-	get_tree().change_scene_to_file(MAIN_MENU_PATH)
+	var context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	get_tree().change_scene_to_file(PROJECT_DETAIL_PATH if context != null and bool(context.call("has_project")) else MAIN_MENU_PATH)
 
 
 func _animation_title(animation_id: String) -> String:

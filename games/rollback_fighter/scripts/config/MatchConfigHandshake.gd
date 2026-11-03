@@ -11,6 +11,8 @@ var remote_identity: Dictionary = {}
 var verified: bool = false
 var failed: bool = false
 var failure_message: String = ""
+var project_required: bool = false
+var project_verified: bool = false
 
 
 func build_local_identity(
@@ -104,7 +106,12 @@ func accept_remote_identity(candidate: Dictionary) -> Dictionary:
 
 
 func can_start_network_match() -> bool:
-	return verified and not failed
+	return verified and not failed and (not project_required or project_verified)
+
+
+func set_project_verification(required: bool, verified_value: bool = false) -> void:
+	project_required = required
+	project_verified = verified_value if required else true
 
 
 func may_start_match(networked: bool) -> bool:

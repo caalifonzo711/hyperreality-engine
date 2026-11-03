@@ -3,6 +3,7 @@ class_name RollbackFighterCreatorBuilder
 
 const LoaderScript = preload("res://games/rollback_fighter/scripts/config/CharacterDefinitionLoader.gd")
 const AlignmentScript = preload("res://games/rollback_fighter/scripts/config/CreatorPresentationDraft.gd")
+const PresentationManifestScript = preload("res://games/rollback_fighter/scripts/config/FighterPresentationManifest.gd")
 const ANIMATIONS := ["idle", "jab", "heavy", "block", "dodge", "hit", "dead"]
 const PHASES := ["startup", "active", "recovery"]
 const FPS := {"idle": 8000, "jab": 12000, "heavy": 10000, "block": 8000, "dodge": 12000, "hit": 12000, "dead": 1000}
@@ -23,6 +24,9 @@ func build(fighter_id: String) -> Dictionary:
 	var heavy_hitbox: Dictionary = _read_json(root + "/hitboxes/heavy.json")
 	if creator.is_empty() or str(creator.get("fighter_id", "")) != fighter_id:
 		return _fail("Creator draft is missing or has a mismatched identity.")
+	var manifest_errors: Array[Dictionary] = PresentationManifestScript.validate_slot_manifest(slot_manifest)
+	if not manifest_errors.is_empty():
+		return _fail("Fighter presentation manifest is invalid.", manifest_errors)
 	creator["playable"] = false
 	creator["status"] = "building"
 	creator["blocked_reason"] = "runtime package validation is in progress"

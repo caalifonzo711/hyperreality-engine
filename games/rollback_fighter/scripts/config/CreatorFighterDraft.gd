@@ -3,6 +3,7 @@ class_name RollbackFighterCreatorDraft
 
 
 const LoaderScript = preload("res://games/rollback_fighter/scripts/config/CharacterDefinitionLoader.gd")
+const PresentationResolverScript = preload("res://games/rollback_fighter/scripts/config/FighterPresentationManifestResolver.gd")
 const REGISTRY_PATH := "res://games/rollback_fighter/config/builtin_fighters.json"
 const MOVE_KEYS := ["startup", "active", "recovery", "damage", "hitstun", "knockback_x", "hitstop", "contact_cooldown", "guard_damage"]
 const JAB_HITBOX := {
@@ -24,27 +25,28 @@ const PRESET_PROFILES := {
 	"platform_fighter": {
 		"fast": {"movement": [380, 18000, 21000, 35000], "guard": [300, 1, 1], "dodge": [16, 2, 6, 22], "light": [2, 2, 4, 7, 9, 220, 3, 6, 30], "heavy": [6, 2, 14, 14, 12, 600, 7, 12, 90]},
 		"committed": {"movement": [320, 14400, 19200, 28800], "guard": [300, 1, 1], "dodge": [16, 2, 6, 26], "light": [2, 2, 5, 7, 9, 220, 3, 6, 30], "heavy": [7, 2, 16, 15, 13, 650, 8, 14, 100]},
-		"art": {"jab": [1, 1, 1], "heavy": [2, 1, 1]},
 	},
 	"footsies": {
 		"fast": {"movement": [330, 14000, 23000, 28000], "guard": [320, 1, 1], "dodge": [16, 2, 6, 24], "light": [2, 2, 4, 7, 9, 220, 3, 6, 30], "heavy": [6, 2, 14, 14, 12, 600, 7, 12, 90]},
 		"committed": {"movement": [280, 11000, 19000, 24000], "guard": [320, 1, 1], "dodge": [18, 3, 7, 30], "light": [3, 2, 5, 7, 10, 210, 3, 7, 35], "heavy": [8, 2, 16, 17, 14, 650, 8, 14, 105]},
-		"art": {"jab": [2, 1, 1], "heavy": [2, 1, 2]},
 	},
 	"anime_fighter": {
 		"fast": {"movement": [360, 17000, 21000, 32000], "guard": [280, 1, 1], "dodge": [16, 2, 6, 22], "light": [2, 2, 4, 6, 8, 210, 3, 6, 28], "heavy": [7, 2, 14, 15, 12, 620, 7, 12, 95]},
 		"committed": {"movement": [310, 13000, 18000, 26000], "guard": [280, 1, 1], "dodge": [18, 3, 7, 28], "light": [3, 2, 6, 7, 10, 220, 4, 7, 32], "heavy": [9, 2, 18, 18, 15, 700, 9, 15, 110]},
-		"art": {"jab": [2, 2, 2], "heavy": [3, 2, 3]},
 	},
 	"custom": {
 		"fast": {"movement": [340, 15000, 20000, 29000], "guard": [300, 1, 1], "dodge": [16, 2, 6, 24], "light": [2, 2, 4, 7, 9, 220, 3, 6, 30], "heavy": [6, 2, 14, 14, 12, 600, 7, 12, 90]},
 		"committed": {"movement": [300, 12500, 18000, 25000], "guard": [300, 1, 1], "dodge": [18, 3, 7, 30], "light": [3, 2, 5, 7, 10, 220, 3, 7, 32], "heavy": [8, 2, 16, 16, 14, 650, 8, 14, 100]},
-		"art": {"jab": [1, 1, 1], "heavy": [2, 1, 2]},
 	},
 }
 
 var fighter_name: String = ""
 var fighter_id: String = ""
+var project_id: String = ""
+var presentation_style_id: String = "platform_fighter"
+var presentation_policy_reference: String = ""
+var presentation_manifest_id: String = "platform_fighter_v1"
+var presentation_manifest_version: int = 1
 var preset_id: String = "platform_fighter"
 var feel_percent: int = 0
 var character_document: Dictionary = {}
@@ -68,6 +70,30 @@ func set_identity(display_name: String, requested_id: String) -> void:
 	fighter_name = display_name.strip_edges()
 	fighter_id = requested_id.strip_edges()
 	_apply_identity()
+
+
+func set_project_context(requested_project_id: String) -> bool:
+	if requested_project_id.is_empty():
+		project_id = ""
+		return true
+	if not _is_safe_id(requested_project_id):
+		return false
+	project_id = requested_project_id
+	return true
+
+
+func set_presentation_policy(style_id: String, policy_reference: String = "") -> bool:
+	var resolved: Dictionary = PresentationResolverScript.resolve(style_id, policy_reference)
+	if not bool(resolved.get("ok", false)):
+		last_errors = resolved.get("errors", [])
+		return false
+	var manifest: RollbackFighterPresentationManifest = resolved["manifest"]
+	presentation_style_id = manifest.style_preset
+	presentation_policy_reference = policy_reference
+	presentation_manifest_id = manifest.manifest_id
+	presentation_manifest_version = manifest.manifest_version
+	_rebuild_slot_manifest()
+	return true
 
 
 static func id_from_display_name(display_name: String) -> String:
@@ -313,8 +339,6 @@ func _apply_profile() -> void:
 	var dodge_values: Array = _interpolate_array(fast["dodge"], committed["dodge"])
 	var light_values: Array = _interpolate_array(fast["light"], committed["light"])
 	var heavy_values: Array = _interpolate_array(fast["heavy"], committed["heavy"])
-	var jab_art_counts: Array = profile["art"]["jab"]
-	var heavy_art_counts: Array = profile["art"]["heavy"]
 	character_document = {
 		"config_version": 1,
 		"identity": {"id": fighter_id, "display_name": fighter_name},
@@ -352,7 +376,7 @@ func _apply_profile() -> void:
 		"heavy": HEAVY_HITBOX.duplicate(true),
 	}
 	_apply_identity()
-	_rebuild_slot_manifest(jab_art_counts, heavy_art_counts)
+	_rebuild_slot_manifest()
 
 
 func _apply_identity() -> void:
@@ -394,51 +418,15 @@ func _interpolate_integer(start_value: int, end_value: int, percent: int) -> int
 	return start_value + rounded_delta
 
 
-func _rebuild_slot_manifest(jab_art_counts: Array, heavy_art_counts: Array) -> void:
-	var animations: Dictionary = {
-		"idle": _simple_slots("idle", 3, 2),
-		"jab": _attack_slots("jab", "light", jab_art_counts),
-		"heavy": _attack_slots("heavy", "heavy", heavy_art_counts),
-		"block": _simple_slots("block", 2, 1),
-		"dodge": _simple_slots("dodge", 3, 2),
-		"hit": _simple_slots("hit", 2, 1),
-		"dead": _simple_slots("dead", 2, 1),
-	}
-	slot_manifest = {"manifest_version": 1, "animations": animations}
-
-
-func _simple_slots(animation_id: String, count: int, required_count: int) -> Array:
-	var slots: Array = []
-	for index in count:
-		slots.append({
-			"slot": "%s_%d" % [animation_id, index],
-			"required": index < required_count,
-			"assigned": false,
-		})
-	return slots
-
-
-func _attack_slots(animation_id: String, move_slot: String, counts: Array) -> Dictionary:
-	var move: Dictionary = move_documents[move_slot]
-	var phases: Array[String] = ["startup", "active", "recovery"]
-	var phase_slots: Dictionary = {}
-	for index in phases.size():
-		var phase: String = phases[index]
-		var count: int = maxi(int(counts[index]), 1 if animation_id == "jab" and phase in ["startup", "active"] else 0)
-		if feel_percent <= 20 and (phase == "startup" or phase == "recovery") and count > 1:
-			count -= 1
-		elif feel_percent >= 80 and animation_id == "heavy" and phase == "recovery":
-			count += 1
-		var slots: Array = []
-		for slot_index in count:
-			var required: bool = animation_id == "jab" and phase in ["startup", "active"] and slot_index == 0
-			slots.append({"slot": "%s_%s_%d" % [animation_id, phase, slot_index], "required": required, "assigned": false})
-		phase_slots[phase] = {
-			"simulation_frames": int(move[phase]),
-			"recommended_drawings": count,
-			"slots": slots,
-		}
-	return phase_slots
+func _rebuild_slot_manifest() -> void:
+	var resolved: Dictionary = PresentationResolverScript.resolve(presentation_style_id, presentation_policy_reference)
+	if not bool(resolved.get("ok", false)):
+		last_errors = resolved.get("errors", [])
+		return
+	var manifest: RollbackFighterPresentationManifest = resolved["manifest"]
+	presentation_manifest_id = manifest.manifest_id
+	presentation_manifest_version = manifest.manifest_version
+	slot_manifest = manifest.to_slot_manifest(move_documents, slot_manifest)
 
 
 func _build_creator_manifest() -> Dictionary:
@@ -456,6 +444,11 @@ func _build_creator_manifest() -> Dictionary:
 		"manifest_version": 1,
 		"draft_kind": "fighter_creator_draft",
 		"fighter_id": fighter_id,
+		"project_id": project_id,
+		"presentation_style_id": presentation_style_id,
+		"presentation_policy_reference": presentation_policy_reference,
+		"presentation_manifest_id": presentation_manifest_id,
+		"presentation_manifest_version": presentation_manifest_version,
 		"display_name": fighter_name,
 		"selected_preset": preset_id,
 		"feel_percent": feel_percent,

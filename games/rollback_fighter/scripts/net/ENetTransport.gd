@@ -16,6 +16,10 @@ signal start_match_received()
 signal match_config_received(identity: Dictionary)
 signal match_selection_received(p1_fighter_id: String, p2_fighter_id: String)
 signal match_selection_ack_received(p1_fighter_id: String, p2_fighter_id: String)
+signal project_config_received(identity: Dictionary)
+signal project_config_response_received(response: Dictionary)
+
+const ProjectWriterScript = preload("res://games/rollback_fighter/scripts/projects/CanonicalProjectWriter.gd")
 
 @export var port: int = 7777
 @export var max_clients: int = 1
@@ -125,6 +129,22 @@ func send_match_config(identity: Dictionary) -> void:
 		_rpc_receive_match_config.rpc_id(remote_peer_id, identity.duplicate(true))
 	else:
 		_rpc_receive_match_config.rpc_id(1, identity.duplicate(true))
+
+
+func send_project_config(identity: Dictionary) -> bool:
+	if not is_host or not is_connected or remote_peer_id <= 0:
+		return false
+	if not bool(ProjectWriterScript.new().verify_identity(identity).get("ok", false)):
+		return false
+	_rpc_receive_project_config.rpc_id(remote_peer_id, identity.duplicate(true))
+	return true
+
+
+func send_project_config_response(response: Dictionary) -> bool:
+	if is_host or not is_connected or not _is_bounded_project_response(response):
+		return false
+	_rpc_receive_project_config_response.rpc_id(1, response.duplicate(true))
+	return true
 
 
 func send_match_selection(p1_fighter_id: String, p2_fighter_id: String) -> bool:
@@ -258,6 +278,50 @@ func _is_bounded_match_config(identity: Dictionary) -> bool:
 		return false
 	if str(identity["digest"]).length() > 64:
 		return false
+	return true
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_project_config(identity: Dictionary) -> void:
+	var sender_id := multiplayer.get_remote_sender_id()
+	if is_host or sender_id != 1:
+		return
+	if not bool(ProjectWriterScript.new().verify_identity(identity).get("ok", false)):
+		return
+	project_config_received.emit(identity.duplicate(true))
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_project_config_response(response: Dictionary) -> void:
+	var sender_id := multiplayer.get_remote_sender_id()
+	if not is_host or sender_id != remote_peer_id or not _is_bounded_project_response(response):
+		return
+	project_config_response_received.emit(response.duplicate(true))
+
+
+func _is_bounded_project_response(response: Dictionary) -> bool:
+	var fields := ["accepted", "code", "message", "project_id", "digest"]
+	if response.size() != fields.size():
+		return false
+	for field in fields:
+		if not response.has(field):
+			return false
+	if typeof(response["accepted"]) != TYPE_BOOL:
+		return false
+	for field in ["code", "message", "project_id", "digest"]:
+		if typeof(response[field]) != TYPE_STRING:
+			return false
+	if str(response["code"]).length() > 64 or str(response["message"]).length() > 192:
+		return false
+	if not RollbackFighterGameProjectDefinition.is_safe_id(str(response["project_id"])):
+		return false
+	var digest := str(response["digest"])
+	if digest.length() != 64:
+		return false
+	for index in digest.length():
+		var code := digest.unicode_at(index)
+		if not ((code >= 48 and code <= 57) or (code >= 97 and code <= 102)):
+			return false
 	return true
 
 

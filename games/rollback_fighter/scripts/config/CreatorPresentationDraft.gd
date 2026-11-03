@@ -176,7 +176,7 @@ func load_slot_image(slot_id: String) -> Dictionary:
 func get_assigned_slot_ids(slot_manifest: Dictionary) -> PackedStringArray:
 	var result: PackedStringArray = PackedStringArray()
 	var animations: Dictionary = slot_manifest.get("animations", {})
-	for animation_id in ANIMATION_ORDER:
+	for animation_id in _manifest_group_order(slot_manifest):
 		if not animations.has(animation_id):
 			continue
 		var value: Variant = animations[animation_id]
@@ -410,7 +410,7 @@ func _append_assigned_from_array(values: Array, output: PackedStringArray) -> vo
 func _manifest_slots_ordered(slot_manifest: Dictionary) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var animations: Dictionary = slot_manifest.get("animations", {})
-	for animation_id in ANIMATION_ORDER:
+	for animation_id in _manifest_group_order(slot_manifest):
 		if not animations.has(animation_id):
 			continue
 		var animation_value: Variant = animations[animation_id]
@@ -421,6 +421,19 @@ func _manifest_slots_ordered(slot_manifest: Dictionary) -> Array[Dictionary]:
 			for phase in PHASE_ORDER:
 				if phases.has(phase):
 					_append_slot_dicts(Array(phases[phase].get("slots", [])), result)
+	return result
+
+
+func _manifest_group_order(slot_manifest: Dictionary) -> PackedStringArray:
+	var result := PackedStringArray()
+	var value: Variant = slot_manifest.get("group_order", ANIMATION_ORDER)
+	if value is Array or value is PackedStringArray:
+		for group_id in value:
+			var id: String = str(group_id)
+			if _is_safe_slot_id(id) and not result.has(id):
+				result.append(id)
+	if result.is_empty():
+		return PackedStringArray(ANIMATION_ORDER)
 	return result
 
 

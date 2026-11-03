@@ -2,6 +2,8 @@ extends Control
 
 const CHARACTER_SELECT_SCENE_PATH := "res://games/rollback_fighter/scenes/CharacterSelect.tscn"
 const CREATOR_WIZARD_SCENE_PATH := "res://games/rollback_fighter/scenes/CreatorWizard.tscn"
+const CREATE_GAME_SCENE_PATH := "res://games/rollback_fighter/scenes/CreateGameWizard.tscn"
+const MY_GAMES_SCENE_PATH := "res://games/rollback_fighter/scenes/MyGames.tscn"
 const NETWORK_SETTINGS_PATH := "user://network_settings.cfg"
 const DEFAULT_PORT := 7777
 
@@ -47,6 +49,13 @@ func _build_ui() -> void:
 	var creator_button: Button = _make_button("Create Fighter")
 	creator_button.pressed.connect(_on_creator_pressed)
 	panel.add_child(creator_button)
+
+	var create_game_button: Button = _make_button("Create Game")
+	create_game_button.pressed.connect(_on_create_game_pressed)
+	panel.add_child(create_game_button)
+	var my_games_button: Button = _make_button("My Games")
+	my_games_button.pressed.connect(_on_my_games_pressed)
+	panel.add_child(my_games_button)
 
 	var host_button: Button = _make_button("Host Game")
 	host_button.pressed.connect(_on_host_pressed)
@@ -102,6 +111,7 @@ func _make_button(label_text: String) -> Button:
 
 
 func _on_host_pressed() -> void:
+	_clear_project_context()
 	var launch_config: Node = get_node_or_null("/root/NetworkLaunchConfig")
 	if launch_config == null or not bool(launch_config.call("set_host", int(_port_input.value))):
 		_status_label.text = "Enter a port from 1 to 65535."
@@ -111,6 +121,7 @@ func _on_host_pressed() -> void:
 
 
 func _on_single_player_pressed() -> void:
+	_clear_project_context()
 	var launch_config: Node = get_node_or_null("/root/NetworkLaunchConfig")
 	if launch_config == null:
 		_status_label.text = "Could not configure Single Player."
@@ -120,12 +131,29 @@ func _on_single_player_pressed() -> void:
 
 
 func _on_creator_pressed() -> void:
+	var context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	if context != null:
+		context.call("launch_global")
 	var error: Error = get_tree().change_scene_to_file(CREATOR_WIZARD_SCENE_PATH)
 	if error != OK:
 		_status_label.text = "Could not open the Creator Wizard."
 
 
+func _on_create_game_pressed() -> void:
+	_clear_project_context()
+	var error: Error = get_tree().change_scene_to_file(CREATE_GAME_SCENE_PATH)
+	if error != OK:
+		_status_label.text = "Could not open the Create Game wizard."
+
+
+func _on_my_games_pressed() -> void:
+	var error: Error = get_tree().change_scene_to_file(MY_GAMES_SCENE_PATH)
+	if error != OK:
+		_status_label.text = "Could not open My Games."
+
+
 func _on_join_pressed() -> void:
+	_clear_project_context()
 	var address: String = _address_input.text.strip_edges()
 	var port: int = int(_port_input.value)
 	if address.is_empty():
@@ -150,6 +178,15 @@ func _launch_arena() -> void:
 		var launch_config: Node = get_node_or_null("/root/NetworkLaunchConfig")
 		if launch_config != null:
 			launch_config.call("clear")
+
+
+func _clear_project_context() -> void:
+	var context: Node = get_node_or_null("/root/CreatorLaunchContext")
+	if context != null:
+		context.call("launch_global")
+	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
+	if project_context != null:
+		project_context.call("clear")
 
 
 func _load_settings() -> void:

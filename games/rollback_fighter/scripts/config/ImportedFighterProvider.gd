@@ -56,6 +56,15 @@ func list_fighters() -> Array[Dictionary]:
 	return result
 
 
+func list_fighters_for_ids(fighter_ids: Array[String]) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for fighter_id in fighter_ids:
+		var loaded := load_fighter(fighter_id)
+		if bool(loaded.get("ok", false)):
+			result.append({"id": fighter_id, "definition": loaded["definition"], "source": "project"})
+	return result
+
+
 func _read_json(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}

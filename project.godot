@@ -26,6 +26,8 @@ display/window/handheld/orientation=0
 RollbackNetplaySingleton="*res://addons/rollback_netplay_mvp/src/RollbackNetplay.gd"
 Gemini="*res://games/rollback_fighter/scripts/GeminiReleaseGate.gd"
 NetworkLaunchConfig="*res://games/rollback_fighter/scripts/net/NetworkLaunchConfig.gd"
+CreatorLaunchContext="*res://games/rollback_fighter/scripts/projects/CreatorLaunchContext.gd"
+GameProjectLaunchConfig="*res://games/rollback_fighter/scripts/projects/GameProjectLaunchConfig.gd"
 EntitlementService="*res://games/rollback_fighter/scripts/commerce/EntitlementService.gd"
 CommerceRuntime="*res://games/rollback_fighter/scripts/commerce/CommerceRuntime.gd"
 

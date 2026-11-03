@@ -4,6 +4,7 @@ class_name RollbackFighterCanonicalConfigWriter
 
 const MAGIC := "HRF-AUTH-V1"
 const MATCH_MAGIC := "HRF-MATCH-AUTH-V1"
+const RULES_MAGIC := "HRF-RULES-AUTH-V1"
 const MOVE_SLOTS := ["light", "heavy"]
 const MOVE_INT_FIELDS := [
 	"startup",
@@ -28,6 +29,13 @@ func character_bytes(
 	_write_string(MAGIC)
 	_write_rules(rules.get_authoritative_data())
 	_write_character(character)
+	return _bytes.duplicate()
+
+
+func rules_bytes(rules: RollbackFighterGameRulesDefinition) -> PackedByteArray:
+	_bytes = PackedByteArray()
+	_write_string(RULES_MAGIC)
+	_write_rules(rules.get_authoritative_data())
 	return _bytes.duplicate()
 
 
