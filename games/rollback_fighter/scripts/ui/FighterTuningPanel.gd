@@ -8,6 +8,9 @@ const LoaderScript = preload(
 const DraftScript = preload(
 	"res://games/rollback_fighter/scripts/config/FighterTuningDraft.gd"
 )
+const CreatorTuningCatalog = preload(
+	"res://games/rollback_fighter/scripts/config/CreatorTuningCatalog.gd"
+)
 
 signal reload_requested
 
@@ -146,8 +149,11 @@ func _build_ui() -> void:
 		field_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(field_label)
 		var spin := SpinBox.new()
-		spin.min_value = float(spec["min"])
-		spin.max_value = MAX_INT_VALUE
+		var shared_spec: Dictionary = CreatorTuningCatalog.get_spec_for_document(
+			str(spec["doc"]), str(spec["section"]), str(spec["key"])
+		)
+		spin.min_value = float(shared_spec.get("min", spec["min"]))
+		spin.max_value = float(shared_spec.get("max", MAX_INT_VALUE))
 		spin.step = 1.0
 		spin.rounded = true
 		spin.allow_greater = false

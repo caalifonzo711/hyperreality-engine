@@ -3,9 +3,15 @@ class_name GeminiHttpClient
 
 # Simple helper to POST JSON and get back { ok, data / error }
 
-func send_request(url: String, headers: PackedStringArray, body: Dictionary) -> Dictionary:
+func send_request(
+	url: String,
+	headers: PackedStringArray,
+	body: Dictionary,
+	timeout_seconds: float = 20.0
+) -> Dictionary:
 	var http := HTTPRequest.new()
 	add_child(http) # Temporary child so the request can run
+	http.timeout = maxf(timeout_seconds, 1.0)
 
 	var json_body := JSON.stringify(body)
 
@@ -18,6 +24,7 @@ func send_request(url: String, headers: PackedStringArray, body: Dictionary) -> 
 
 	if err != OK:
 		push_error("GeminiHttpClient: request() failed with error code %d" % err)
+		http.queue_free()
 		return {
 			"ok": false,
 			"error": "request_failed",
@@ -31,6 +38,7 @@ func send_request(url: String, headers: PackedStringArray, body: Dictionary) -> 
 	var response_code: int = signal_result[1]
 	var _resp_headers: PackedStringArray = signal_result[2]
 	var resp_body: PackedByteArray = signal_result[3]
+	http.queue_free()
 
 	if result_code != HTTPRequest.RESULT_SUCCESS:
 		push_error("GeminiHttpClient: HTTP request failed, result=%d" % result_code)
@@ -49,6 +57,7 @@ func send_request(url: String, headers: PackedStringArray, body: Dictionary) -> 
 		return {
 			"ok": false,
 			"error": "json_parse_error",
+			"status_code": response_code,
 			"raw": text
 		}
 

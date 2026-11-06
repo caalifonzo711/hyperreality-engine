@@ -7,6 +7,10 @@ const DraftScript = preload("res://games/rollback_fighter/scripts/config/Creator
 const ArtImporter = preload("res://games/rollback_fighter/scripts/config/CreatorArtImporter.gd")
 const AlignmentDraftScript = preload("res://games/rollback_fighter/scripts/config/CreatorPresentationDraft.gd")
 const BuilderScript = preload("res://games/rollback_fighter/scripts/config/CreatorFighterBuilder.gd")
+const TuningCatalog = preload("res://games/rollback_fighter/scripts/config/CreatorTuningCatalog.gd")
+const AIServiceScript = preload("res://games/rollback_fighter/scripts/ai_services/AIService.gd")
+const AITuningAssistantScript = preload("res://games/rollback_fighter/scripts/ai_services/AIFighterTuningAssistant.gd")
+const AIArtGeneratorScript = preload("res://games/rollback_fighter/scripts/ai_services/AIFighterArtGenerator.gd")
 const AlignerScene = preload("res://games/rollback_fighter/scenes/CreatorSpriteAligner.tscn")
 const ANIMATION_ORDER := ["idle", "jab", "heavy", "block", "dodge", "hit", "dead"]
 const PHASE_ORDER := ["startup", "active", "recovery"]
@@ -26,16 +30,32 @@ var _create_button: Button
 var _build_button: Button
 var _display_name_input: LineEdit
 var _fighter_id_input: LineEdit
+var _visual_description_input: TextEdit
 var _art_progress_label: Label
 var _file_dialog: FileDialog
 var _pending_slot_id: String = ""
 var _preset_selector: OptionButton
 var _feel_slider: HSlider
 var _feel_value_label: Label
+var _ai_service: Node
+var _ai_tuning_assistant
+var _feel_description: String = ""
+var _description_input: TextEdit
+var _suggest_button: Button
+var _pending_tuning_proposal = null
+var _advanced_controls: Dictionary = {}
+var _updating_tuning_controls: bool = false
+var _ai_art_generator
+var _generation_buttons: Dictionary = {}
+var _generating_slot_id: String = ""
 
 
 func _ready() -> void:
 	_draft = DraftScript.new()
+	_ai_service = AIServiceScript.new()
+	add_child(_ai_service)
+	_ai_tuning_assistant = AITuningAssistantScript.new()
+	_ai_art_generator = AIArtGeneratorScript.new()
 	var context: Node = get_node_or_null("/root/CreatorLaunchContext")
 	if context != null:
 		_draft.set_project_context(str(context.call("get_project_id")))
@@ -117,6 +137,11 @@ func _make_button(label_text: String) -> Button:
 
 
 func _render_page() -> void:
+	_description_input = null
+	_suggest_button = null
+	_visual_description_input = null
+	_advanced_controls.clear()
+	_generation_buttons.clear()
 	for child in _page_container.get_children():
 		child.queue_free()
 	var titles: PackedStringArray = PackedStringArray(["STEP 1 — IDENTITY", "STEP 2 — FIGHTER FEEL", "STEP 3 — REQUIRED ART", "STEP 4 — SPRITE ALIGNMENT", "STEP 5 — REVIEW"])
@@ -163,8 +188,15 @@ func _render_identity_page() -> void:
 	_fighter_id_input.text = _draft.fighter_id
 	_fighter_id_input.text_changed.connect(_on_id_changed)
 	_page_container.add_child(_fighter_id_input)
+	_add_field_label("Visual / Character Description  (creator metadata)")
+	_visual_description_input = TextEdit.new()
+	_visual_description_input.placeholder_text = "Red-haired masked luchadora in hand-drawn ink style, black boots, oversized red gloves."
+	_visual_description_input.custom_minimum_size.y = 110.0
+	_visual_description_input.text = _draft.visual_description
+	_visual_description_input.text_changed.connect(_on_visual_description_changed)
+	_page_container.add_child(_visual_description_input)
 	var note: Label = Label.new()
-	note.text = "A draft folder is created when the first image is imported or Create Draft is selected. Existing built-in or draft IDs cannot be reused."
+	note.text = "The visual description is optional creator metadata for consistent art prompts. It does not affect gameplay or fighter digests. A draft folder is created when the first image is imported or Create Draft is selected."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_page_container.add_child(note)
 
@@ -202,6 +234,200 @@ func _render_feel_page() -> void:
 	safe_note.text = "The slider uses integer interpolation between validated preset endpoints. The editable draft is separate from fighters in the current match."
 	safe_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_page_container.add_child(safe_note)
+	_render_ai_tuning_section()
+	_render_advanced_tuning_controls()
+
+
+func _render_ai_tuning_section() -> void:
+	var heading: Label = Label.new()
+	heading.text = "DESCRIBE FIGHTER FEEL (OPTIONAL)"
+	heading.add_theme_font_size_override("font_size", 18)
+	_page_container.add_child(heading)
+	var prompt_label: Label = Label.new()
+	prompt_label.text = "Describe how you want this fighter to feel:"
+	_page_container.add_child(prompt_label)
+	_description_input = TextEdit.new()
+	_description_input.placeholder_text = "Slow, defensive heavyweight with a weak jab and a terrifying committed heavy attack."
+	_description_input.custom_minimum_size.y = 112.0
+	_description_input.text = _feel_description
+	_description_input.text_changed.connect(_on_feel_description_changed)
+	_page_container.add_child(_description_input)
+	var buttons: HBoxContainer = HBoxContainer.new()
+	_page_container.add_child(buttons)
+	_suggest_button = _make_button("Suggest Tuning")
+	_suggest_button.pressed.connect(_on_suggest_tuning_pressed)
+	buttons.add_child(_suggest_button)
+	var clear_button: Button = _make_button("Clear")
+	clear_button.pressed.connect(_on_clear_tuning_description_pressed)
+	buttons.add_child(clear_button)
+	if _pending_tuning_proposal != null:
+		_render_tuning_proposal_preview()
+
+
+func _render_tuning_proposal_preview() -> void:
+	var panel: PanelContainer = PanelContainer.new()
+	var content: VBoxContainer = VBoxContainer.new()
+	content.add_theme_constant_override("separation", 6)
+	panel.add_child(content)
+	_page_container.add_child(panel)
+	var heading: Label = Label.new()
+	heading.text = "AI TUNING SUGGESTION"
+	heading.add_theme_font_size_override("font_size", 18)
+	content.add_child(heading)
+	var differences: Array[Dictionary] = _pending_tuning_proposal.differences()
+	if differences.is_empty():
+		var unchanged: Label = Label.new()
+		unchanged.text = "The suggested supported values already match the current draft."
+		content.add_child(unchanged)
+	else:
+		for difference: Dictionary in differences:
+			var row: Label = Label.new()
+			row.text = "%s\n%d  →  %d" % [str(difference.label), int(difference.before), int(difference.after)]
+			content.add_child(row)
+	var reason_label: Label = Label.new()
+	reason_label.text = "Reason: %s" % str(_pending_tuning_proposal.reason)
+	reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(reason_label)
+	if not str(_pending_tuning_proposal.unsupported_note).is_empty():
+		var unsupported: Label = Label.new()
+		unsupported.text = str(_pending_tuning_proposal.unsupported_note)
+		unsupported.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(unsupported)
+	if not _pending_tuning_proposal.clamped_fields.is_empty():
+		var clamped: Label = Label.new()
+		clamped.text = "Some values were adjusted to the creator's safe ranges."
+		clamped.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(clamped)
+	var actions: HBoxContainer = HBoxContainer.new()
+	content.add_child(actions)
+	var apply_button: Button = _make_button("Apply")
+	apply_button.pressed.connect(_on_apply_tuning_proposal_pressed)
+	actions.add_child(apply_button)
+	var cancel_button: Button = _make_button("Cancel")
+	cancel_button.pressed.connect(_on_cancel_tuning_proposal_pressed)
+	actions.add_child(cancel_button)
+	var regenerate_button: Button = _make_button("Regenerate")
+	regenerate_button.pressed.connect(_on_suggest_tuning_pressed)
+	actions.add_child(regenerate_button)
+
+
+func _render_advanced_tuning_controls() -> void:
+	var heading: Label = Label.new()
+	heading.text = "ADVANCED TUNING"
+	heading.add_theme_font_size_override("font_size", 18)
+	_page_container.add_child(heading)
+	var note: Label = Label.new()
+	note.text = "AI proposals and manual edits use these same supported integer fields and safe ranges."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_page_container.add_child(note)
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 5)
+	_page_container.add_child(grid)
+	_updating_tuning_controls = true
+	for spec: Dictionary in TuningCatalog.get_specs():
+		var label: Label = Label.new()
+		label.text = str(spec.label)
+		grid.add_child(label)
+		var control: SpinBox = SpinBox.new()
+		var allowed: Vector2i = TuningCatalog.get_range(_draft, spec)
+		control.min_value = allowed.x
+		control.max_value = allowed.y
+		control.step = 1.0
+		control.rounded = true
+		control.allow_greater = false
+		control.allow_lesser = false
+		control.custom_minimum_size.x = 150.0
+		control.value = TuningCatalog.get_value(_draft, spec)
+		control.value_changed.connect(_on_advanced_tuning_changed.bind(str(spec.id)))
+		grid.add_child(control)
+		_advanced_controls[str(spec.id)] = control
+	_updating_tuning_controls = false
+
+
+func _on_feel_description_changed() -> void:
+	if _description_input != null:
+		_feel_description = _description_input.text
+
+
+func _on_clear_tuning_description_pressed() -> void:
+	_feel_description = ""
+	_pending_tuning_proposal = null
+	_render_page()
+
+
+func _on_suggest_tuning_pressed() -> void:
+	if _description_input != null:
+		_feel_description = _description_input.text
+	if _suggest_button != null:
+		_suggest_button.disabled = true
+	_status_label.text = "Requesting a structured tuning proposal..."
+	var result: Dictionary = await _ai_tuning_assistant.request_proposal(
+		_ai_service,
+		_draft,
+		_feel_description,
+		_draft.presentation_style_id
+	)
+	if is_instance_valid(_suggest_button):
+		_suggest_button.disabled = false
+	if not bool(result.get("success", false)):
+		_status_label.text = str(result.get("user_message", "AI tuning is unavailable."))
+		return
+	_pending_tuning_proposal = result.get("proposal")
+	_render_page()
+	_status_label.text = "Review the proposal. The draft has not changed."
+
+
+func _on_apply_tuning_proposal_pressed() -> void:
+	if _pending_tuning_proposal == null:
+		return
+	var result: Dictionary = _pending_tuning_proposal.apply_to_draft(_draft)
+	if not bool(result.get("ok", false)):
+		_status_label.text = str(result.get("message", "The tuning proposal could not be applied."))
+		return
+	if _draft.draft_created:
+		var save_result: Dictionary = _draft.save_config_documents()
+		if not bool(save_result.get("ok", false)):
+			_status_label.text = _format_errors(save_result.get("errors", []))
+			return
+		var manifest_result: Dictionary = _draft.save_art_manifests()
+		if not bool(manifest_result.get("ok", false)):
+			_status_label.text = _format_errors(manifest_result.get("errors", []))
+			return
+	_pending_tuning_proposal = null
+	_render_page()
+	_status_label.text = "Tuning applied. Every value remains manually editable."
+
+
+func _on_cancel_tuning_proposal_pressed() -> void:
+	_pending_tuning_proposal = null
+	_render_page()
+	_status_label.text = "Suggestion cancelled. The draft was not changed."
+
+
+func _on_advanced_tuning_changed(value: float, field_id: String) -> void:
+	if _updating_tuning_controls:
+		return
+	TuningCatalog.set_value(_draft, field_id, int(round(value)))
+	_draft.refresh_after_tuning()
+	_refresh_feel_preview()
+
+
+func _refresh_advanced_controls() -> void:
+	if _advanced_controls.is_empty():
+		return
+	_updating_tuning_controls = true
+	for spec: Dictionary in TuningCatalog.get_specs():
+		var field_id: String = str(spec.id)
+		var control: SpinBox = _advanced_controls.get(field_id)
+		if control == null:
+			continue
+		var allowed: Vector2i = TuningCatalog.get_range(_draft, spec)
+		control.min_value = allowed.x
+		control.max_value = allowed.y
+		control.value = TuningCatalog.get_value(_draft, spec)
+	_updating_tuning_controls = false
 
 
 func _render_art_page() -> void:
@@ -209,6 +435,18 @@ func _render_art_page() -> void:
 	intro.text = "%s\nSimulation frames are not PNG counts; an 8-frame startup can use one drawing." % str(_draft.slot_manifest.get("help_text", "Add the required fighter drawings."))
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_page_container.add_child(intro)
+	if bool(_ai_service.enabled) and not bool(_ai_service.supports("IMAGE_GENERATION")):
+		var unavailable: Label = Label.new()
+		unavailable.text = "Current AI provider does not support image generation. Manual Add Image remains available."
+		unavailable.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_page_container.add_child(unavailable)
+	elif bool(_ai_service.enabled) and bool(_ai_service.supports("IMAGE_GENERATION")):
+		var configuration: Dictionary = _ai_service.validate_configuration()
+		if not bool(configuration.get("success", false)):
+			var unconfigured: Label = Label.new()
+			unconfigured.text = "%s Manual Add Image remains available." % str(configuration.get("user_message", "AI image generation is not configured."))
+			unconfigured.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_page_container.add_child(unconfigured)
 	_art_progress_label = Label.new()
 	_art_progress_label.add_theme_font_size_override("font_size", 18)
 	_page_container.add_child(_art_progress_label)
@@ -293,13 +531,58 @@ func _add_slot_cards(animation_id: String, phase: String, slots: Array) -> void:
 			var remove_button: Button = _make_button("Remove")
 			remove_button.pressed.connect(_remove_art_slot.bind(slot_id))
 			controls.add_child(remove_button)
+			_add_generation_button(controls, slot_id, true)
 			content.add_child(controls)
 		else:
 			var add_button: Button = _make_button("+ Add Image")
 			add_button.custom_minimum_size.y = 72.0
 			add_button.pressed.connect(_open_art_picker.bind(slot_id))
 			content.add_child(add_button)
+			_add_generation_button(content, slot_id, false)
 		grid.add_child(card)
+
+
+func _add_generation_button(parent: Control, slot_id: String, assigned: bool) -> void:
+	if not _can_generate_art():
+		return
+	var button: Button = _make_button("Regenerate" if assigned else "Generate")
+	button.disabled = not _generating_slot_id.is_empty()
+	button.pressed.connect(_on_generate_art_pressed.bind(slot_id))
+	parent.add_child(button)
+	_generation_buttons[slot_id] = button
+
+
+func _can_generate_art() -> bool:
+	if _ai_service == null or not bool(_ai_service.enabled):
+		return false
+	if not bool(_ai_service.supports("IMAGE_GENERATION")):
+		return false
+	return bool(_ai_service.validate_configuration().get("success", false))
+
+
+func _on_generate_art_pressed(slot_id: String) -> void:
+	if not _generating_slot_id.is_empty():
+		return
+	var button: Button = _generation_buttons.get(slot_id)
+	if button == null:
+		return
+	_generating_slot_id = slot_id
+	for value: Variant in _generation_buttons.values():
+		if value is Button:
+			value.disabled = true
+	button.text = "Generating..."
+	_status_label.text = "Generating %s, then validating it through the normal creator importer..." % _slot_title(slot_id)
+	var result: Dictionary = await _ai_art_generator.generate_slot(
+		_ai_service, _draft, _alignment_draft, slot_id
+	)
+	_generating_slot_id = ""
+	if not bool(result.get("success", false)):
+		_render_page()
+		_status_label.text = str(result.get("user_message", "Image generation failed. Existing art was retained."))
+		return
+	_sync_alignment_progress()
+	_render_page()
+	_status_label.text = str(result.get("user_message", "Generated art imported successfully."))
 
 
 func _render_review_page() -> void:
@@ -446,6 +729,7 @@ func _refresh_feel_preview() -> void:
 		_draft.get_move_value("heavy", "active"),
 		_draft.get_move_value("heavy", "recovery"),
 	]
+	_refresh_advanced_controls()
 
 
 func _on_name_changed(value: String) -> void:
@@ -464,6 +748,11 @@ func _on_id_changed(value: String) -> void:
 		return
 	_id_is_manual = true
 	_draft.set_identity(_display_name_input.text, value)
+
+
+func _on_visual_description_changed() -> void:
+	if _visual_description_input != null:
+		_draft.set_visual_description(_visual_description_input.text)
 
 
 func _on_preset_selected(index: int) -> void:
@@ -490,6 +779,7 @@ func _on_back_pressed() -> void:
 func _on_next_pressed() -> void:
 	if _page == 0:
 		_draft.set_identity(_display_name_input.text, _fighter_id_input.text)
+		_draft.set_visual_description(_visual_description_input.text)
 		var identity_errors: Array[Dictionary] = _draft.validate_identity()
 		if not identity_errors.is_empty():
 			_status_label.text = _format_errors(identity_errors)

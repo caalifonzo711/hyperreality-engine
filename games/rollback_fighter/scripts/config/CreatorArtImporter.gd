@@ -62,6 +62,9 @@ static func import_png(draft_root: String, fighter_id: String, slot_manifest: Di
 	slot["display_filename"] = display_name
 	slot["width"] = width
 	slot["height"] = height
+	# Manual imports clear prior AI provenance. The AI generation coordinator
+	# adds fresh provenance only after this same importer succeeds.
+	slot.erase("generation_provenance")
 	return {"ok": true, "path": destination, "width": width, "height": height, "bytes": byte_count}
 
 
@@ -84,6 +87,7 @@ static func remove_slot(draft_root: String, fighter_id: String, slot_manifest: D
 	slot.erase("display_filename")
 	slot.erase("width")
 	slot.erase("height")
+	slot.erase("generation_provenance")
 	return {"ok": true}
 
 

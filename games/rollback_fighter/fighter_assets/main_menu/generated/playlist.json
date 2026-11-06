@@ -1,0 +1,398 @@
+{
+    "format_version":  2,
+    "static_image":  "res://games/rollback_fighter/fighter_assets/main_menu/Screenshot 2026-04-29 200632.png",
+    "clips":  [
+                  {
+                      "clip_id":  "animated_beach_wave_and_beer_toss",
+                      "source_filename":  "Animated Beach Wave and Beer Toss.gif",
+                      "width":  414,
+                      "height":  309,
+                      "frames":  [
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_000.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_001.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_002.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_003.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_004.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_005.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_006.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_007.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_008.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_009.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_010.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_wave_and_beer_toss/frame_011.png",
+                                         "duration_seconds":  0.18
+                                     }
+                                 ]
+                  },
+                  {
+                      "clip_id":  "animated_beach_waves_and_wrecked_ship",
+                      "source_filename":  "Animated Beach Waves and Wrecked Ship.gif",
+                      "width":  472,
+                      "height":  271,
+                      "frames":  [
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_000.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_001.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_002.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_003.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_004.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_005.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_006.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_007.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_008.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_009.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_010.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_beach_waves_and_wrecked_ship/frame_011.png",
+                                         "duration_seconds":  0.18
+                                     }
+                                 ]
+                  },
+                  {
+                      "clip_id":  "animated_tentacles_by_the_shore",
+                      "source_filename":  "Animated Tentacles by the Shore.gif",
+                      "width":  358,
+                      "height":  358,
+                      "frames":  [
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_000.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_001.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_002.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_003.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_004.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_005.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_006.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_007.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_008.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_009.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_010.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/animated_tentacles_by_the_shore/frame_011.png",
+                                         "duration_seconds":  0.18
+                                     }
+                                 ]
+                  },
+                  {
+                      "clip_id":  "cartoon_beach_tentacle_drink_loop",
+                      "source_filename":  "Cartoon Beach Tentacle Drink Loop.gif",
+                      "width":  472,
+                      "height":  271,
+                      "frames":  [
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_000.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_001.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_002.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_003.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_004.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_005.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_006.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_007.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_008.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_009.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_010.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/cartoon_beach_tentacle_drink_loop/frame_011.png",
+                                         "duration_seconds":  0.18
+                                     }
+                                 ]
+                  },
+                  {
+                      "clip_id":  "scribbly_beach_creature_can_chase",
+                      "source_filename":  "Scribbly Beach Creature Can Chase.gif",
+                      "width":  472,
+                      "height":  271,
+                      "frames":  [
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_000.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_001.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_002.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_003.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_004.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_005.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_006.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_007.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_008.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_009.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_010.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/scribbly_beach_creature_can_chase/frame_011.png",
+                                         "duration_seconds":  0.18
+                                     }
+                                 ]
+                  },
+                  {
+                      "clip_id":  "tentacle_s_can_playing_beach_adventure",
+                      "source_filename":  "Tentacle’s Can-Playing Beach Adventure.gif",
+                      "width":  409,
+                      "height":  311,
+                      "frames":  [
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_000.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_001.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_002.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_003.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_004.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_005.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_006.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_007.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_008.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_009.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_010.png",
+                                         "duration_seconds":  0.18
+                                     },
+                                     {
+                                         "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/tentacle_s_can_playing_beach_adventure/frame_011.png",
+                                         "duration_seconds":  0.18
+                                     }
+                                 ]
+                  }
+              ],
+    "crest":  {
+                  "clip_id":  "rotating_mexican_soviet_crest_glitch",
+                  "source_filename":  "Rotating Mexican-Soviet Crest Glitch.gif",
+                  "width":  362,
+                  "height":  362,
+                  "frames":  [
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_000.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_001.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_002.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_003.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_004.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_005.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_006.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_007.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_008.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_009.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_010.png",
+                                     "duration_seconds":  0.18
+                                 },
+                                 {
+                                     "path":  "res://games/rollback_fighter/fighter_assets/main_menu/generated/rotating_mexican_soviet_crest_glitch/frame_011.png",
+                                     "duration_seconds":  0.18
+                                 }
+                             ]
+              }
+}

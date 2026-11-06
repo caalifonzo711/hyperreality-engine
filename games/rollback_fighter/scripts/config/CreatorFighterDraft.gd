@@ -42,6 +42,7 @@ const PRESET_PROFILES := {
 
 var fighter_name: String = ""
 var fighter_id: String = ""
+var visual_description: String = ""
 var project_id: String = ""
 var presentation_style_id: String = "platform_fighter"
 var presentation_policy_reference: String = ""
@@ -70,6 +71,10 @@ func set_identity(display_name: String, requested_id: String) -> void:
 	fighter_name = display_name.strip_edges()
 	fighter_id = requested_id.strip_edges()
 	_apply_identity()
+
+
+func set_visual_description(value: String) -> void:
+	visual_description = value.strip_edges().left(2000)
 
 
 func set_project_context(requested_project_id: String) -> bool:
@@ -134,6 +139,12 @@ func get_character_value(section: String, key: String) -> int:
 func get_move_value(slot: String, key: String) -> int:
 	var move: Dictionary = move_documents.get(slot, {})
 	return int(move.get(key, 0))
+
+
+func refresh_after_tuning() -> void:
+	# Presentation frame metadata follows the authoritative move timings, while
+	# the assigned art itself remains untouched.
+	_rebuild_slot_manifest()
 
 
 func get_art_slot_total() -> int:
@@ -450,6 +461,7 @@ func _build_creator_manifest() -> Dictionary:
 		"presentation_manifest_id": presentation_manifest_id,
 		"presentation_manifest_version": presentation_manifest_version,
 		"display_name": fighter_name,
+		"visual_description": visual_description,
 		"selected_preset": preset_id,
 		"feel_percent": feel_percent,
 		"playable": false,

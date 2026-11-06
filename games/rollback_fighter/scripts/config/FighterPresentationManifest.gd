@@ -254,7 +254,7 @@ func _runtime_slot(slot: Dictionary, previous: Dictionary) -> Dictionary:
 		"assigned": false,
 	}
 	var old: Dictionary = _find_runtime_slot(previous, slot_id)
-	for key in ["assigned", "path", "display_filename", "width", "height"]:
+	for key in ["assigned", "path", "display_filename", "width", "height", "generation_provenance"]:
 		if old.has(key):
 			result[key] = old[key]
 	return result
