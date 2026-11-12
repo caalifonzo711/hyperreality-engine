@@ -110,6 +110,8 @@ var _use_enet: bool = true
 var _is_host: bool = true
 var _enet_address: String = DEFAULT_ENET_IP
 var _enet_port: int = DEFAULT_ENET_PORT
+var _enet_local_port: int = 0
+var _connection_mode: String = "DIRECT_IP"
 var _connection_failure_message: String = ""
 var _return_menu_button: Button = null
 var _host_start_button: Button = null
@@ -331,6 +333,12 @@ func _ready() -> void:
 			print("[Arena] Single Player mode | P1=human | P2=deterministic CPU")
 	else:
 		if _use_enet:
+			if _connection_mode == "DIRECT":
+				var nat_coordinator: Node = get_node_or_null("/root/NatTraversalCoordinator")
+				var handoff: Dictionary = nat_coordinator.call("release_for_enet") if nat_coordinator != null else {}
+				if handoff.is_empty() or int(handoff.get("local_port", 0)) != _enet_local_port:
+					_set_connection_status("Direct connection handoff failed.")
+					return
 			transport = ENetTransportScene.new()
 			transport.name = "ENetTransport"
 			transport.artificial_delay_frames = (
@@ -352,7 +360,7 @@ func _ready() -> void:
 					print("[Arena] ENet HOST mode | player_id=1 | port=%d" % _enet_port)
 			else:
 				local_player_id = 2
-				transport.join(_enet_address, _enet_port)
+				transport.join(_enet_address, _enet_port, _enet_local_port)
 				if OS.is_debug_build():
 					print("[Arena] ENet CLIENT mode | player_id=2 | joining %s:%d" % [_enet_address, _enet_port])
 		else:
@@ -600,6 +608,8 @@ func _configure_network_launch() -> void:
 		_match_mode = mode
 		_enet_address = str(launch.get("address", ""))
 		_enet_port = int(launch.get("port", 0))
+		_enet_local_port = int(launch.get("local_port", 0))
+		_connection_mode = str(launch.get("connection_mode", "DIRECT_IP"))
 		var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")
 		var project_network_match := project_context != null and bool(project_context.call("is_network_project"))
 		_match_config_handshake.set_project_verification(project_network_match, false)

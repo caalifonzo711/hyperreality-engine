@@ -35,6 +35,8 @@ var _entitlement_service: Node
 var _redemption_service: Node
 var _commerce_service: Node
 var _leaving: bool = false
+var _signaling_context: Dictionary = {}
+var _nat_coordinator
 
 
 func _ready() -> void:
@@ -82,6 +84,60 @@ func _ready() -> void:
 	if project_context != null and bool(project_context.call("is_project_match")):
 		var project_launch: Dictionary = project_context.call("get_context")
 		_mode_label.text = "%s — %s" % [str(project_launch.get("display_name", "Custom Game")), _mode.replace("_", " ").capitalize()]
+	_configure_signaling_waiting_room(launch)
+
+
+func _configure_signaling_waiting_room(launch: Dictionary) -> void:
+	var value: Variant = launch.get("signaling", {})
+	if not value is Dictionary:
+		return
+	var signaling_value: Dictionary = value
+	if signaling_value.is_empty():
+		return
+	_signaling_context = signaling_value.duplicate(true)
+	_status_label.add_theme_font_size_override("font_size", 22)
+	_nat_coordinator = get_node_or_null("/root/NatTraversalCoordinator")
+	if _nat_coordinator == null:
+		_set_error("Direct connection service is unavailable.")
+		return
+	if not _nat_coordinator.state_changed.is_connected(_on_nat_state_changed):
+		_nat_coordinator.state_changed.connect(_on_nat_state_changed)
+	if not _nat_coordinator.traversal_completed.is_connected(_on_nat_traversal_completed):
+		_nat_coordinator.traversal_completed.connect(_on_nat_traversal_completed)
+	_set_signaling_waiting(true)
+	var current_state := str(_nat_coordinator.call("get_state"))
+	if current_state == "DIRECT":
+		_on_nat_traversal_completed(true, _nat_coordinator.call("get_result"))
+	elif current_state == "RELAY_REQUIRED":
+		_on_nat_traversal_completed(false, _nat_coordinator.call("get_result"))
+	else:
+		_on_nat_state_changed(current_state, "Waiting for opponent..." if bool(_signaling_context.get("is_host", false)) else "Connecting directly...")
+
+
+func _on_nat_state_changed(_state: String, message: String) -> void:
+	if _leaving:
+		return
+	_status_label.text = "Room Code: %s\n%s" % [str(_signaling_context.get("room_code", "")), message]
+
+
+func _on_nat_traversal_completed(success: bool, result: Dictionary) -> void:
+	if _leaving:
+		return
+	if not success:
+		_set_signaling_waiting(true)
+		_status_label.text = "Direct connection unavailable. Relay required."
+		return
+	if not bool(_launch_config.call("set_traversal_result", result)):
+		_set_error("Direct connection metadata is invalid.")
+		return
+	_set_signaling_waiting(false)
+	_status_label.text = "Connected directly. Select fighters." if _mode == "host" else "Connected directly. Choose Join Match."
+
+
+func _set_signaling_waiting(waiting: bool) -> void:
+	_p1_selector.disabled = waiting or _mode == "client"
+	_p2_selector.disabled = waiting or _mode == "client"
+	_start_button.disabled = waiting
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -486,6 +542,8 @@ func _on_back_pressed() -> void:
 	if _leaving:
 		return
 	_leaving = true
+	if _nat_coordinator != null:
+		_nat_coordinator.call("cancel")
 	if _launch_config != null:
 		_launch_config.call("clear")
 	var project_context: Node = get_node_or_null("/root/GameProjectLaunchConfig")

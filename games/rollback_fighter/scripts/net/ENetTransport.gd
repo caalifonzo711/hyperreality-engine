@@ -61,11 +61,11 @@ func host(host_port: int = 7777) -> void:
 		print("[ENetTransport] Hosting on port %d" % port)
 
 
-func join(ip: String, host_port: int = 7777) -> void:
+func join(ip: String, host_port: int = 7777, local_port: int = 0) -> void:
 	port = host_port
 	is_host = false
 
-	var err: int = peer.create_client(ip, port)
+	var err: int = peer.create_client(ip, port, 0, 0, 0, local_port)
 	if err != OK:
 		connection_failed.emit("Failed to join %s:%d. Error=%d" % [ip, port, err])
 		return
